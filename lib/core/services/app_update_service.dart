@@ -205,7 +205,7 @@ class AppUpdateService {
                 width: double.infinity,
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: EmbyTheme.bgSurface,
+                  color: EmbyTheme.surface,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
