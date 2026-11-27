@@ -150,6 +150,9 @@ class AppPreferences {
   final String aiAsrModel;
   final String aiSourceLang; // auto / ja / en
   final bool aiBilingual;
+  // 应用自动更新与全能签软件源配置
+  final String updateFeedUrl;
+  final bool autoCheckUpdate;
 
   const AppPreferences({
     this.seekSeconds = 10,
@@ -163,6 +166,9 @@ class AppPreferences {
     this.aiAsrModel = 'whisper-large-v3-turbo',
     this.aiSourceLang = 'ja',
     this.aiBilingual = true,
+    this.updateFeedUrl =
+        'https://github.com/tao1801050815-debug/emby_stream_vault/releases/download/latest/apps.json',
+    this.autoCheckUpdate = true,
   });
 
   AppPreferences copyWith({
@@ -177,6 +183,8 @@ class AppPreferences {
     String? aiAsrModel,
     String? aiSourceLang,
     bool? aiBilingual,
+    String? updateFeedUrl,
+    bool? autoCheckUpdate,
   }) {
     return AppPreferences(
       seekSeconds: seekSeconds ?? this.seekSeconds,
@@ -190,6 +198,8 @@ class AppPreferences {
       aiAsrModel: aiAsrModel ?? this.aiAsrModel,
       aiSourceLang: aiSourceLang ?? this.aiSourceLang,
       aiBilingual: aiBilingual ?? this.aiBilingual,
+      updateFeedUrl: updateFeedUrl ?? this.updateFeedUrl,
+      autoCheckUpdate: autoCheckUpdate ?? this.autoCheckUpdate,
     );
   }
 }

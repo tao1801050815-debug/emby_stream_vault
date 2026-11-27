@@ -42,7 +42,15 @@ jobs:
         run: |
           find ~/.pub-cache -path "*/flutter_inappwebview_android*/android/build.gradle" -exec sed -i 's/proguard-android\.txt/proguard-android-optimize.txt/g' {} +
           find ~/.pub-cache -path "*/file_picker*/android/build.gradle" -exec sed -i -E 's/compileSdk(Version)?[[:space:]]*=?[[:space:]]*34/compileSdk 36/g' {} +
-      - run: flutter build apk --release
+      - name: Build Android APK with auto-increment version
+        run: |
+          APP_VERSION="1.0.${{ github.run_number }}"
+          APP_BUILD="${{ github.run_number }}"
+          flutter build apk --release \
+            --build-name="$APP_VERSION" \
+            --build-number="$APP_BUILD" \
+            --dart-define="APP_VERSION=$APP_VERSION" \
+            --dart-define="APP_BUILD=$APP_BUILD"
       - uses: actions/upload-artifact@v4
         with:
           name: EmbyStreamVault-Android-APK
@@ -66,7 +74,15 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes array" ios/Runner/Info.plist || true
           /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes:0 string audio" ios/Runner/Info.plist || true
       - run: flutter pub get
-      - run: flutter build ios --release --no-codesign
+      - name: Build iOS (unsigned) with auto-increment version
+        run: |
+          APP_VERSION="1.0.${{ github.run_number }}"
+          APP_BUILD="${{ github.run_number }}"
+          flutter build ios --release --no-codesign \
+            --build-name="$APP_VERSION" \
+            --build-number="$APP_BUILD" \
+            --dart-define="APP_VERSION=$APP_VERSION" \
+            --dart-define="APP_BUILD=$APP_BUILD"
       - name: Package unsigned IPA
         run: |
           mkdir -p Payload
@@ -81,6 +97,9 @@ jobs:
     needs: [ build_android, build_ios_unsigned ]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
       - name: Download Android APK
         uses: actions/download-artifact@v4
         with:
@@ -93,16 +112,85 @@ jobs:
           path: release_files
       - name: Rename Android APK
         run: mv release_files/app-release.apk release_files/EmbyStreamVault-Android.apk
+      - name: Generate AltStore / GBox / ESign Software Source (apps.json)
+        env:
+          REPO: ${{ github.repository }}
+          RUN_NUM: ${{ github.run_number }}
+        run: |
+          python3 - << 'PY'
+          import datetime, json, os, subprocess
+
+          repo = os.environ["REPO"]
+          run_num = int(os.environ["RUN_NUM"])
+          version = f"1.0.{run_num}"
+          now_iso = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+          ipa_path = "release_files/EmbyStreamVault-unsigned.ipa"
+          ipa_size = os.path.getsize(ipa_path) if os.path.exists(ipa_path) else 0
+
+          try:
+              log = subprocess.check_output(
+                  ["git", "log", "-n", "5", "--pretty=format:- %s"],
+                  text=True,
+              ).strip()
+          except Exception:
+              log = "- 自动构建最新功能版本"
+
+          base_dl = f"https://github.com/{repo}/releases/download/latest"
+          ipa_url = f"{base_dl}/EmbyStreamVault-unsigned.ipa"
+          apk_url = f"{base_dl}/EmbyStreamVault-Android.apk"
+          feed_url = f"{base_dl}/apps.json"
+
+          app_entry = {
+              "name": "EmbyStreamVault",
+              "bundleIdentifier": "dev.embystream.embyStreamVault",
+              "developerName": "EmbyStreamVault",
+              "subtitle": "Emby 风格私人影库与 AI 实时中文字幕",
+              "version": version,
+              "buildNumber": run_num,
+              "versionDate": now_iso,
+              "versionDescription": log,
+              "downloadURL": ipa_url,
+              "androidDownloadURL": apk_url,
+              "localizedDescription": "Emby 风格私人媒体库、片源嗅探、增强播放器、离线缓存与纯手机端 AI 实时中文字幕。",
+              "size": ipa_size,
+              "versions": [
+                  {
+                      "version": version,
+                      "buildVersion": str(run_num),
+                      "date": now_iso,
+                      "localizedDescription": log,
+                      "downloadURL": ipa_url,
+                      "size": ipa_size,
+                  }
+              ],
+          }
+
+          source = {
+              "name": "EmbyStreamVault 软件源",
+              "identifier": "dev.embystream.repo",
+              "subtitle": "GitHub Actions 自动构建更新源（支持全能签 / 轻松签 / AltStore）",
+              "sourceURL": feed_url,
+              "apps": [app_entry],
+          }
+
+          with open("release_files/apps.json", "w", encoding="utf-8") as f:
+              json.dump(source, f, ensure_ascii=False, indent=2)
+          PY
       - name: Publish to GitHub Release (latest)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: EmbyStreamVault Latest Build
+          name: EmbyStreamVault v1.0.${{ github.run_number }}
           body: |
-            自动构建的最新双端安装包：
+            自动构建的最新双端安装包（`v1.0.${{ github.run_number }}`）：
             - `EmbyStreamVault-unsigned.ipa`：iOS / iPadOS 未签名安装包
             - `EmbyStreamVault-Android.apk`：Android 安装包
+            - `apps.json`：全能签 / 轻松签 / AltStore 软件源订阅文件
+
+            全能签添加软件源地址：
+            `https://github.com/${{ github.repository }}/releases/download/latest/apps.json`
           files: |
             release_files/EmbyStreamVault-unsigned.ipa
             release_files/EmbyStreamVault-Android.apk
+            release_files/apps.json
           make_latest: true

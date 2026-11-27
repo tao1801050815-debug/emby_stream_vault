@@ -15,6 +15,8 @@ class SettingsRepository {
   static const _aiAsrModelKey = 'pref_ai_asr_model';
   static const _aiSourceLangKey = 'pref_ai_source_lang';
   static const _aiBilingualKey = 'pref_ai_bilingual';
+  static const _updateFeedUrlKey = 'pref_update_feed_url';
+  static const _autoCheckUpdateKey = 'pref_auto_check_update';
 
   Future<List<SiteProfile>> loadSites() async {
     final prefs = await SharedPreferences.getInstance();
@@ -50,6 +52,9 @@ class SettingsRepository {
           prefs.getString(_aiAsrModelKey) ?? 'whisper-large-v3-turbo',
       aiSourceLang: prefs.getString(_aiSourceLangKey) ?? 'ja',
       aiBilingual: prefs.getBool(_aiBilingualKey) ?? true,
+      updateFeedUrl: prefs.getString(_updateFeedUrlKey) ??
+          'https://github.com/tao1801050815-debug/emby_stream_vault/releases/download/latest/apps.json',
+      autoCheckUpdate: prefs.getBool(_autoCheckUpdateKey) ?? true,
     );
   }
 
@@ -66,5 +71,7 @@ class SettingsRepository {
     await prefs.setString(_aiAsrModelKey, value.aiAsrModel);
     await prefs.setString(_aiSourceLangKey, value.aiSourceLang);
     await prefs.setBool(_aiBilingualKey, value.aiBilingual);
+    await prefs.setString(_updateFeedUrlKey, value.updateFeedUrl);
+    await prefs.setBool(_autoCheckUpdateKey, value.autoCheckUpdate);
   }
 }

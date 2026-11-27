@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/site_config.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/services/app_update_service.dart';
 import '../../core/services/live_ai_subtitle_service.dart';
 import '../../core/theme/emby_theme.dart';
 import '../browser/webview_sniffer_page.dart';
@@ -189,6 +191,67 @@ class SettingsPage extends ConsumerWidget {
               ],
             ),
           ),
+          const SizedBox(height: 20),
+          const _SectionHeader('应用更新与全能签软件源'),
+          const SizedBox(height: 8),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  title: const Text('检查新版本'),
+                  subtitle: Text(
+                    '当前版本：v$kAppVersion (build $kAppBuildNumber)',
+                    style: const TextStyle(color: EmbyTheme.textSecondary),
+                  ),
+                  trailing: const Icon(Icons.system_update_rounded,
+                      color: EmbyTheme.accent),
+                  onTap: () => _checkUpdateNow(context, prefs),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  title: const Text('复制全能签软件源地址'),
+                  subtitle: const Text(
+                    '粘贴到全能签 → 软件源，以后 GitHub 构建完即可一键原地更新',
+                    style: TextStyle(color: EmbyTheme.textSecondary),
+                  ),
+                  trailing: const Icon(Icons.copy_rounded),
+                  onTap: () async {
+                    await Clipboard.setData(
+                      ClipboardData(text: prefs.updateFeedUrl),
+                    );
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('已复制全能签软件源地址，直接粘贴到全能签即可'),
+                        ),
+                      );
+                    }
+                  },
+                ),
+                const Divider(height: 1),
+                SwitchListTile(
+                  title: const Text('启动时自动检查更新'),
+                  subtitle: const Text('检测到 GitHub 发布新版时自动弹窗提醒'),
+                  value: prefs.autoCheckUpdate,
+                  onChanged: (v) => ref
+                      .read(appPreferencesProvider.notifier)
+                      .update(prefs.copyWith(autoCheckUpdate: v)),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  title: const Text('自定义更新源地址 / 加速代理'),
+                  subtitle: Text(
+                    prefs.updateFeedUrl,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: EmbyTheme.textSecondary),
+                  ),
+                  trailing: const Icon(Icons.edit_outlined),
+                  onTap: () => _editUpdateFeedDialog(context, ref, prefs),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -324,6 +387,91 @@ class SettingsPage extends ConsumerWidget {
         );
       }
     }
+  }
+
+  Future<void> _checkUpdateNow(
+    BuildContext context,
+    AppPreferences prefs,
+  ) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('正在检查 GitHub 最新版本...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+    final res = await AppUpdateService.checkForUpdate(
+      feedUrl: prefs.updateFeedUrl,
+    );
+    if (!context.mounted) return;
+    if (res.error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(res.error!)),
+      );
+      return;
+    }
+    if (res.hasUpdate && res.release != null) {
+      await AppUpdateService.showUpdateDialog(
+        context,
+        release: res.release!,
+        feedUrl: prefs.updateFeedUrl,
+      );
+    } else {
+      final remoteVer = res.release?.version ?? kAppVersion;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('当前已是最新版本（v$remoteVer）')),
+      );
+    }
+  }
+
+  Future<void> _editUpdateFeedDialog(
+    BuildContext context,
+    WidgetRef ref,
+    AppPreferences prefs,
+  ) async {
+    final ctrl = TextEditingController(text: prefs.updateFeedUrl);
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('自定义更新源地址'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '默认指向 GitHub Releases 的 apps.json；如直连较慢可加上加速代理前缀。',
+              style: TextStyle(fontSize: 12, color: EmbyTheme.textSecondary),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: ctrl,
+              maxLines: 2,
+              decoration: const InputDecoration(labelText: 'apps.json 订阅地址'),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => ctrl.text = kDefaultUpdateFeedUrl,
+              child: const Text('恢复默认 GitHub 地址'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    if (saved == true && ctrl.text.trim().isNotEmpty) {
+      await ref
+          .read(appPreferencesProvider.notifier)
+          .update(prefs.copyWith(updateFeedUrl: ctrl.text.trim()));
+    }
+    ctrl.dispose();
   }
 
   Future<void> _editSiteDialog(
