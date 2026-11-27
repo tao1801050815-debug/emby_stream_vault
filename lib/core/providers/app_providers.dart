@@ -24,7 +24,9 @@ class SiteProfilesNotifier extends StateNotifier<List<SiteProfile>> {
   }
 
   Future<void> _load() async {
-    final loaded = await _repo.loadSites();
+    final loaded = (await _repo.loadSites())
+        .where((e) => e.key != 'ryxuxfoc')
+        .toList();
     final existingKeys = loaded.map((e) => e.key).toSet();
     final missingDefaults = SiteProfile.defaults()
         .where((d) => !existingKeys.contains(d.key))

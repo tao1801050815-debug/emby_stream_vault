@@ -463,6 +463,89 @@ class _WebViewSnifferPageState extends ConsumerState<WebViewSnifferPage> {
     }
   }
 
+  Future<void> _quickAddSiteDialog() async {
+    final nameCtrl = TextEditingController();
+    final urlCtrl = TextEditingController();
+    final searchCtrl = TextEditingController(text: '{base}/search/{query}');
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('添加新片源网站'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: '网站名称（如 新站点）'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: urlCtrl,
+                decoration: const InputDecoration(
+                    labelText: '网站地址（如 https://xxx.com）'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: searchCtrl,
+                decoration: const InputDecoration(
+                    labelText: '搜索模板（可选，默认即可）'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('添加并打开'),
+          ),
+        ],
+      ),
+    );
+    if (saved == true && urlCtrl.text.trim().isNotEmpty) {
+      var rawUrl = urlCtrl.text.trim();
+      if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
+        rawUrl = 'https://$rawUrl';
+      }
+      final base = rawUrl.replaceAll(RegExp(r'/+$'), '');
+      final uri = Uri.tryParse(base);
+      final hostSlug = (uri?.host ?? 'site')
+          .replaceAll(RegExp(r'^www\.'), '')
+          .split('.')
+          .first
+          .replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '')
+          .toLowerCase();
+      final key = hostSlug.isNotEmpty
+          ? hostSlug
+          : 'site_${DateTime.now().millisecondsSinceEpoch % 10000}';
+      final displayName = nameCtrl.text.trim().isNotEmpty
+          ? nameCtrl.text.trim()
+          : (uri?.host ?? key);
+
+      final newSite = SiteProfile(
+        key: key,
+        name: displayName,
+        baseUrl: base,
+        searchTemplate: searchCtrl.text.trim().isNotEmpty
+            ? searchCtrl.text.trim()
+            : '{base}/search/{query}',
+        loginUrl: base,
+      );
+      await ref.read(siteProfilesProvider.notifier).addSite(newSite);
+      if (mounted) {
+        setState(() => _activeSiteKey = newSite.key);
+        await _loadUrl(newSite.baseUrl);
+      }
+    }
+    nameCtrl.dispose();
+    urlCtrl.dispose();
+    searchCtrl.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final sites = ref.watch(siteProfilesProvider);
@@ -534,6 +617,14 @@ class _WebViewSnifferPageState extends ConsumerState<WebViewSnifferPage> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               scrollDirection: Axis.horizontal,
               itemBuilder: (_, idx) {
+                if (idx == sites.length) {
+                  return ActionChip(
+                    avatar: const Icon(Icons.add_rounded,
+                        size: 16, color: EmbyTheme.accent),
+                    label: const Text('添加网站'),
+                    onPressed: _quickAddSiteDialog,
+                  );
+                }
                 final site = sites[idx];
                 final selected = site.key == _activeSiteKey;
                 return ChoiceChip(
@@ -547,7 +638,7 @@ class _WebViewSnifferPageState extends ConsumerState<WebViewSnifferPage> {
                 );
               },
               separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemCount: sites.length,
+              itemCount: sites.length + 1,
             ),
           ),
           if (_progress < 1.0)
