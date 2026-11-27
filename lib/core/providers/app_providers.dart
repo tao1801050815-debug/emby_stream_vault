@@ -147,6 +147,13 @@ class MediaLibraryNotifier extends StateNotifier<AsyncValue<List<MediaItem>>> {
     await refresh();
   }
 
+  Future<void> saveItemsBatch(List<MediaItem> items) async {
+    for (final item in items) {
+      await DatabaseHelper.instance.upsertMediaItem(item);
+    }
+    await refresh();
+  }
+
   Future<void> deleteItem(String id) async {
     await DatabaseHelper.instance.deleteMediaItem(id);
     await refresh();

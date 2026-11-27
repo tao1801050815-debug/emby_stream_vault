@@ -238,6 +238,150 @@ class _WebViewSnifferPageState extends ConsumerState<WebViewSnifferPage> {
     }
   }
 
+  /// 批量导入当前网页的影片列表（如 MissAV 收藏夹 /cn/saved、演员主页、合集列表）
+  Future<void> _batchImportCurrentPage(SiteProfile currentSite) async {
+    if (_controller == null) return;
+
+    const js = r'''
+      (function() {
+        try {
+          var seen = {};
+          var items = [];
+          var anchors = document.querySelectorAll('a[href]');
+          anchors.forEach(function(a) {
+            var href = a.href || '';
+            if (!href.startsWith('http') || seen[href]) return;
+            var img = a.querySelector('img');
+            if (!img) return;
+            var poster = img.getAttribute('data-src') || img.getAttribute('data-original') || img.getAttribute('src') || '';
+            if (!poster || poster.startsWith('data:image')) return;
+            if (/avatar|logo|icon|banner/i.test(poster)) return;
+
+            var card = a.closest('div, article, li') || a.parentElement;
+            var title = (a.getAttribute('title') || img.getAttribute('alt') || '').trim();
+            if (!title && card) {
+              var titleEl = card.querySelector('h2, h3, h4, .title, .video-title, a.text-secondary, a[alt]');
+              if (titleEl) title = (titleEl.textContent || '').trim();
+            }
+            if (!title) title = (a.textContent || '').trim();
+            title = title.replace(/\s+/g, ' ').trim();
+
+            var codeMatch = (href + ' ' + title).match(/([A-Za-z]{2,6}-\d{2,5}|FC2-PPV-\d{5,7})/i);
+            var code = codeMatch ? codeMatch[1].toUpperCase() : '';
+            if (!code) {
+              var segs = href.replace(/\/+$/, '').split('/');
+              var last = segs[segs.length - 1] || '';
+              if (last.length >= 3 && last.length <= 24 && !/\.(html|php)$/i.test(last)) {
+                code = last.toUpperCase();
+              }
+            }
+            if (!code || (!title && !code)) return;
+
+            seen[href] = true;
+            items.push({
+              code: code,
+              title: title || code,
+              posterUrl: poster,
+              sourceUrl: href
+            });
+          });
+          return JSON.stringify(items);
+        } catch (e) {
+          return '[]';
+        }
+      })();
+    ''';
+
+    final res = await _controller!.evaluateJavascript(source: js);
+    final parsed = <Map<String, dynamic>>[];
+    if (res is String && res.isNotEmpty) {
+      try {
+        final rawList = jsonDecode(res) as List<dynamic>;
+        for (final entry in rawList) {
+          if (entry is Map<String, dynamic>) {
+            parsed.add(entry);
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
+
+    if (parsed.isEmpty) {
+      final jumpToSaved = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('当前页未识别到影片列表'),
+          content: const Text(
+            '请先在内置浏览器中登录 MissAV 账号并打开你的收藏夹页面（或任意影片列表页），再点此按钮即可一键批量导入到 Emby 海报墙。',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('知道了'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('直达 MissAV 收藏夹'),
+            ),
+          ],
+        ),
+      );
+      if (jumpToSaved == true) {
+        final base = currentSite.baseUrl.replaceAll(RegExp(r'/+$'), '');
+        await _loadUrl('$base/cn/saved');
+      }
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('识别到 ${parsed.length} 部影片'),
+        content: Text(
+          '是否将本页的 ${parsed.length} 部影片全部导入到「Emby 私人影库」并标记为收藏？\n（已存在且手动锁定纠错的影片会自动保留你的修改）',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('全部导入'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final batch = parsed.map((m) {
+      final code = (m['code'] as String? ?? '').trim();
+      final title = (m['title'] as String? ?? code).trim();
+      return MediaItem(
+        id: '${_activeSiteKey}_$code',
+        code: code,
+        title: title.isNotEmpty ? title : code,
+        posterUrl: (m['posterUrl'] as String? ?? '').trim(),
+        isFavorite: true,
+        sourceSite: _activeSiteKey,
+        sourceUrl: (m['sourceUrl'] as String? ?? '').trim(),
+        updatedAtMs: now,
+      );
+    }).toList();
+
+    await ref.read(mediaLibraryProvider.notifier).saveItemsBatch(batch);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('成功导入 ${batch.length} 部影片到私人影库！翻到下一页可继续导入'),
+        ),
+      );
+    }
+  }
+
   Future<void> _openNativePlayer(String streamUrl) async {
     final cookieHeader = await _collectCookieHeader(_sniffed.pageUrl);
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -324,6 +468,12 @@ class _WebViewSnifferPageState extends ConsumerState<WebViewSnifferPage> {
           ),
         ),
         actions: [
+          IconButton(
+            tooltip: '批量导入本页收藏（如 MissAV 收藏夹）',
+            icon: const Icon(Icons.playlist_add_check_rounded,
+                color: EmbyTheme.accent),
+            onPressed: () => _batchImportCurrentPage(currentSite),
+          ),
           IconButton(
             tooltip: '收藏当前网页（免登录）',
             icon: const Icon(Icons.bookmark_add_rounded,
