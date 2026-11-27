@@ -134,9 +134,151 @@ class SettingsPage extends ConsumerWidget {
               ],
             ),
           ),
+          const SizedBox(height: 20),
+          const _SectionHeader('AI 实时中文字幕（纯手机端）'),
+          const SizedBox(height: 8),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  title: const Text('语音识别接口与 API Key'),
+                  subtitle: Text(
+                    prefs.aiApiKey.isNotEmpty
+                        ? '${prefs.aiAsrModel} · Key 已配置'
+                        : '未配置（点此选择 Groq 免费 / 硅基流动 / OpenAI 预设）',
+                    style: const TextStyle(color: EmbyTheme.textSecondary),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _editAiSubtitleDialog(context, ref, prefs),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  title: const Text('视频原声语言'),
+                  trailing: DropdownButton<String>(
+                    value: prefs.aiSourceLang,
+                    items: const [
+                      DropdownMenuItem(value: 'ja', child: Text('日语 (ja)')),
+                      DropdownMenuItem(value: 'en', child: Text('英语 (en)')),
+                      DropdownMenuItem(value: 'auto', child: Text('自动识别')),
+                    ],
+                    onChanged: (v) {
+                      if (v == null) return;
+                      ref
+                          .read(appPreferencesProvider.notifier)
+                          .update(prefs.copyWith(aiSourceLang: v));
+                    },
+                  ),
+                ),
+                const Divider(height: 1),
+                SwitchListTile(
+                  title: const Text('显示双语字幕（中文 + 原文）'),
+                  value: prefs.aiBilingual,
+                  onChanged: (v) => ref
+                      .read(appPreferencesProvider.notifier)
+                      .update(prefs.copyWith(aiBilingual: v)),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _editAiSubtitleDialog(
+    BuildContext context,
+    WidgetRef ref,
+    AppPreferences prefs,
+  ) async {
+    final baseCtrl = TextEditingController(text: prefs.aiApiBaseUrl);
+    final keyCtrl = TextEditingController(text: prefs.aiApiKey);
+    final modelCtrl = TextEditingController(text: prefs.aiAsrModel);
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('配置 AI 实时字幕'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '一键填充预设：',
+                style: TextStyle(fontSize: 12, color: EmbyTheme.textSecondary),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  ActionChip(
+                    label: const Text('Groq 免费极速'),
+                    onPressed: () {
+                      baseCtrl.text = 'https://api.groq.com/openai/v1';
+                      modelCtrl.text = 'whisper-large-v3-turbo';
+                    },
+                  ),
+                  ActionChip(
+                    label: const Text('硅基流动 国内直连'),
+                    onPressed: () {
+                      baseCtrl.text = 'https://api.siliconflow.cn/v1';
+                      modelCtrl.text = 'FunAudioLLM/SenseVoiceSmall';
+                    },
+                  ),
+                  ActionChip(
+                    label: const Text('OpenAI'),
+                    onPressed: () {
+                      baseCtrl.text = 'https://api.openai.com/v1';
+                      modelCtrl.text = 'whisper-1';
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: baseCtrl,
+                decoration: const InputDecoration(labelText: 'API Base URL'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: modelCtrl,
+                decoration: const InputDecoration(labelText: '语音识别模型名'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: keyCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'API Key (sk-... / gsk_...)'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+
+    if (saved == true) {
+      await ref.read(appPreferencesProvider.notifier).update(
+            prefs.copyWith(
+              aiApiBaseUrl: baseCtrl.text.trim(),
+              aiApiKey: keyCtrl.text.trim(),
+              aiAsrModel: modelCtrl.text.trim(),
+            ),
+          );
+    }
+    baseCtrl.dispose();
+    keyCtrl.dispose();
+    modelCtrl.dispose();
   }
 
   Future<void> _editSiteDialog(

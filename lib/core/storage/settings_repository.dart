@@ -10,6 +10,11 @@ class SettingsRepository {
   static const _sharpnessKey = 'pref_sharpness';
   static const _blockAdsKey = 'pref_block_ads';
   static const _uaKey = 'pref_custom_ua';
+  static const _aiBaseUrlKey = 'pref_ai_base_url';
+  static const _aiApiKey = 'pref_ai_api_key';
+  static const _aiAsrModelKey = 'pref_ai_asr_model';
+  static const _aiSourceLangKey = 'pref_ai_source_lang';
+  static const _aiBilingualKey = 'pref_ai_bilingual';
 
   Future<List<SiteProfile>> loadSites() async {
     final prefs = await SharedPreferences.getInstance();
@@ -38,6 +43,13 @@ class SettingsRepository {
       enableSharpness: prefs.getBool(_sharpnessKey) ?? false,
       blockPopupAds: prefs.getBool(_blockAdsKey) ?? true,
       customUserAgent: prefs.getString(_uaKey) ?? '',
+      aiApiBaseUrl:
+          prefs.getString(_aiBaseUrlKey) ?? 'https://api.groq.com/openai/v1',
+      aiApiKey: prefs.getString(_aiApiKey) ?? '',
+      aiAsrModel:
+          prefs.getString(_aiAsrModelKey) ?? 'whisper-large-v3-turbo',
+      aiSourceLang: prefs.getString(_aiSourceLangKey) ?? 'ja',
+      aiBilingual: prefs.getBool(_aiBilingualKey) ?? true,
     );
   }
 
@@ -49,5 +61,10 @@ class SettingsRepository {
     await prefs.setBool(_sharpnessKey, value.enableSharpness);
     await prefs.setBool(_blockAdsKey, value.blockPopupAds);
     await prefs.setString(_uaKey, value.customUserAgent);
+    await prefs.setString(_aiBaseUrlKey, value.aiApiBaseUrl);
+    await prefs.setString(_aiApiKey, value.aiApiKey);
+    await prefs.setString(_aiAsrModelKey, value.aiAsrModel);
+    await prefs.setString(_aiSourceLangKey, value.aiSourceLang);
+    await prefs.setBool(_aiBilingualKey, value.aiBilingual);
   }
 }

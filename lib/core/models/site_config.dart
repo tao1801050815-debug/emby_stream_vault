@@ -144,6 +144,12 @@ class AppPreferences {
   final bool enableSharpness;
   final bool blockPopupAds;
   final String customUserAgent;
+  // 纯手机端 AI 实时字幕配置（支持 Groq / 硅基流动 / OpenAI 兼容接口）
+  final String aiApiBaseUrl;
+  final String aiApiKey;
+  final String aiAsrModel;
+  final String aiSourceLang; // auto / ja / en
+  final bool aiBilingual;
 
   const AppPreferences({
     this.seekSeconds = 10,
@@ -152,6 +158,11 @@ class AppPreferences {
     this.enableSharpness = false,
     this.blockPopupAds = true,
     this.customUserAgent = '',
+    this.aiApiBaseUrl = 'https://api.groq.com/openai/v1',
+    this.aiApiKey = '',
+    this.aiAsrModel = 'whisper-large-v3-turbo',
+    this.aiSourceLang = 'ja',
+    this.aiBilingual = true,
   });
 
   AppPreferences copyWith({
@@ -161,6 +172,11 @@ class AppPreferences {
     bool? enableSharpness,
     bool? blockPopupAds,
     String? customUserAgent,
+    String? aiApiBaseUrl,
+    String? aiApiKey,
+    String? aiAsrModel,
+    String? aiSourceLang,
+    bool? aiBilingual,
   }) {
     return AppPreferences(
       seekSeconds: seekSeconds ?? this.seekSeconds,
@@ -169,6 +185,11 @@ class AppPreferences {
       enableSharpness: enableSharpness ?? this.enableSharpness,
       blockPopupAds: blockPopupAds ?? this.blockPopupAds,
       customUserAgent: customUserAgent ?? this.customUserAgent,
+      aiApiBaseUrl: aiApiBaseUrl ?? this.aiApiBaseUrl,
+      aiApiKey: aiApiKey ?? this.aiApiKey,
+      aiAsrModel: aiAsrModel ?? this.aiAsrModel,
+      aiSourceLang: aiSourceLang ?? this.aiSourceLang,
+      aiBilingual: aiBilingual ?? this.aiBilingual,
     );
   }
 }
