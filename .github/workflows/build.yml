@@ -12,7 +12,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.27.4'
           channel: 'stable'
       - run: flutter pub get
       - run: flutter analyze
@@ -29,7 +28,6 @@ jobs:
           java-version: '17'
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.27.4'
           channel: 'stable'
       - name: Generate Android platform wrapper if missing
         run: |
@@ -50,7 +48,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.27.4'
           channel: 'stable'
       - name: Generate iOS platform wrapper & configure Info.plist
         run: |
