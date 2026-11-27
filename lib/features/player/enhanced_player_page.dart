@@ -94,6 +94,16 @@ class _EnhancedPlayerPageState extends ConsumerState<EnhancedPlayerPage> {
       );
     }
 
+    // 自动加载本地已保存的 AI 字幕（对应时间点自动出现，无需重新识别）
+    final cachedCues =
+        await LiveAiSubtitleSession.loadCachedCues(widget.mediaItem.id);
+    if (cachedCues.isNotEmpty && mounted) {
+      setState(() {
+        _aiCues = cachedCues;
+      });
+      _showHud('已自动加载本地字幕（${cachedCues.length} 句）');
+    }
+
     // 断点续播
     if (widget.mediaItem.lastPositionSec > 5) {
       await _player.seek(Duration(seconds: widget.mediaItem.lastPositionSec));
@@ -197,6 +207,7 @@ class _EnhancedPlayerPageState extends ConsumerState<EnhancedPlayerPage> {
     });
 
     final session = LiveAiSubtitleSession(
+      mediaId: widget.mediaItem.id,
       streamUrl: widget.streamUrl,
       referer: widget.referer,
       cookieHeader: widget.cookieHeader,
@@ -213,7 +224,8 @@ class _EnhancedPlayerPageState extends ConsumerState<EnhancedPlayerPage> {
   }
 
   AiSubtitleCue? _activeAiCue() {
-    if (!_aiSubtitleEnabled || _aiCues.isEmpty) return null;
+    // 只要本地有已保存的字幕（或已开启实时识别），在对应时间点自动显示
+    if (_aiCues.isEmpty) return null;
     final currentSec = (_position.inMilliseconds / 1000.0) - _subtitleDelaySec;
     for (final cue in _aiCues) {
       if (currentSec >= cue.startSec - 0.2 && currentSec <= cue.endSec + 0.4) {

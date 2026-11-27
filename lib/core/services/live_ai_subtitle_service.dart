@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import '../models/site_config.dart';
 
 /// 单条 AI 实时字幕条目
@@ -18,6 +20,20 @@ class AiSubtitleCue {
     required this.originalText,
     required this.translatedText,
   });
+
+  Map<String, dynamic> toJson() => {
+        'startSec': startSec,
+        'endSec': endSec,
+        'originalText': originalText,
+        'translatedText': translatedText,
+      };
+
+  factory AiSubtitleCue.fromJson(Map<String, dynamic> json) => AiSubtitleCue(
+        startSec: ((json['startSec'] as num?) ?? 0).toDouble(),
+        endSec: ((json['endSec'] as num?) ?? 0).toDouble(),
+        originalText: (json['originalText'] as String?) ?? '',
+        translatedText: (json['translatedText'] as String?) ?? '',
+      );
 }
 
 class _HlsSegment {
@@ -39,6 +55,7 @@ class _HlsSegment {
 /// 纯手机端 AI 实时字幕会话：
 /// 直接按播放进度抓取 .m3u8 对应时间点的 .ts 分片 -> 云端语音识别 -> 实时翻译成中文字幕
 class LiveAiSubtitleSession {
+  final String mediaId;
   final String streamUrl;
   final String referer;
   final String cookieHeader;
@@ -62,6 +79,7 @@ class LiveAiSubtitleSession {
   Timer? _scheduler;
 
   LiveAiSubtitleSession({
+    required this.mediaId,
     required this.streamUrl,
     required this.referer,
     required this.cookieHeader,
@@ -69,6 +87,73 @@ class LiveAiSubtitleSession {
     required this.onCuesUpdated,
     required this.onStatusChanged,
   });
+
+  static Future<File> _cacheFileFor(String mediaId) async {
+    final docDir = await getApplicationDocumentsDirectory();
+    final safeName = mediaId.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    final dir = Directory(p.join(docDir.path, 'ai_subtitles'));
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    return File(p.join(dir.path, '$safeName.json'));
+  }
+
+  /// 读取某部影片本地已保存的 AI 字幕（播放时自动调用）
+  static Future<List<AiSubtitleCue>> loadCachedCues(String mediaId) async {
+    if (mediaId.trim().isEmpty) return const [];
+    try {
+      final file = await _cacheFileFor(mediaId);
+      if (!await file.exists()) return const [];
+      final raw = jsonDecode(await file.readAsString());
+      if (raw is Map<String, dynamic> && raw['cues'] is List) {
+        return (raw['cues'] as List)
+            .whereType<Map<String, dynamic>>()
+            .map(AiSubtitleCue.fromJson)
+            .toList();
+      }
+    } catch (_) {}
+    return const [];
+  }
+
+  Future<void> _loadLocalCacheIntoSession() async {
+    if (mediaId.trim().isEmpty) return;
+    try {
+      final file = await _cacheFileFor(mediaId);
+      if (!await file.exists()) return;
+      final raw = jsonDecode(await file.readAsString());
+      if (raw is Map<String, dynamic>) {
+        if (raw['cues'] is List) {
+          _cues
+            ..clear()
+            ..addAll((raw['cues'] as List)
+                .whereType<Map<String, dynamic>>()
+                .map(AiSubtitleCue.fromJson));
+        }
+        if (raw['processedIndices'] is List) {
+          _processedSegmentIndices
+            ..clear()
+            ..addAll((raw['processedIndices'] as List)
+                .map((e) => (e as num).toInt()));
+        }
+        if (_cues.isNotEmpty) {
+          onCuesUpdated(List<AiSubtitleCue>.unmodifiable(_cues));
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _persistCache() async {
+    if (mediaId.trim().isEmpty) return;
+    try {
+      final file = await _cacheFileFor(mediaId);
+      final payload = {
+        'mediaId': mediaId,
+        'processedIndices': _processedSegmentIndices.toList()..sort(),
+        'cues': _cues.map((e) => e.toJson()).toList(),
+      };
+      await file.writeAsString(jsonEncode(payload));
+    } catch (_) {}
+  }
 
   Map<String, String> _streamHeaders() {
     final headers = <String, String>{};
@@ -79,6 +164,9 @@ class LiveAiSubtitleSession {
 
   Future<void> start(double initialPositionSec) async {
     _currentPosSec = initialPositionSec;
+    await _loadLocalCacheIntoSession();
+    if (_disposed) return;
+
     if (prefs.aiApiKey.trim().isEmpty) {
       onStatusChanged('请先在「设置 → AI 实时字幕」中填写 API Key');
       return;
@@ -170,8 +258,9 @@ class LiveAiSubtitleSession {
       }
 
       _cues.sort((a, b) => a.startSec.compareTo(b.startSec));
+      await _persistCache();
       onCuesUpdated(List<AiSubtitleCue>.unmodifiable(_cues));
-      onStatusChanged('AI 字幕运行中（已识别 ${_cues.length} 句）');
+      onStatusChanged('AI 字幕运行中（已保存 ${_cues.length} 句）');
     } catch (e) {
       if (!_disposed) {
         onStatusChanged('识别出错: ${e.toString().split('\n').first}');
