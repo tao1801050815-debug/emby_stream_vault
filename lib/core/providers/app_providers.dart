@@ -137,6 +137,7 @@ final mediaLibraryProvider =
 class MediaLibraryNotifier extends StateNotifier<AsyncValue<List<MediaItem>>> {
   final LibraryFilter _filter;
   final String _javdbBaseUrl;
+  bool _autoBackfilledRatings = false;
 
   MediaLibraryNotifier(
     this._filter, {
@@ -155,9 +156,47 @@ class MediaLibraryNotifier extends StateNotifier<AsyncValue<List<MediaItem>>> {
         sortBy: _filter.sortBy,
       );
       state = AsyncValue.data(items);
+
+      // 首次加载时自动为缺少网评的已收藏影片在后台静默补齐评分
+      if (!_autoBackfilledRatings) {
+        _autoBackfilledRatings = true;
+        final missing = items
+            .where((i) =>
+                i.publicRating <= 0 &&
+                RatingFetcherService.instance.isStandardCode(i.code))
+            .take(16)
+            .toList();
+        if (missing.isNotEmpty) {
+          _fetchPublicRatingInBackground(missing);
+        }
+      }
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }
+  }
+
+  /// 手动一键批量刷新所有缺网评（或指定列表）的影片评分
+  Future<int> refreshMissingRatings(List<MediaItem> targets) async {
+    var successCount = 0;
+    for (final item in targets) {
+      if (!RatingFetcherService.instance.isStandardCode(item.code)) continue;
+      final res = await RatingFetcherService.instance.fetchPublicRating(
+        code: item.code,
+        javdbBaseUrl: _javdbBaseUrl,
+      );
+      if (res != null) {
+        await DatabaseHelper.instance.updatePublicRating(
+          id: item.id,
+          rating: res.rating,
+          source: res.source,
+        );
+        successCount++;
+      }
+    }
+    if (successCount > 0 && mounted) {
+      await refresh();
+    }
+    return successCount;
   }
 
   Future<void> saveItem(MediaItem item) async {

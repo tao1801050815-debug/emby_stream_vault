@@ -242,6 +242,45 @@ class _LibraryHomePageState extends ConsumerState<LibraryHomePage> {
                 ),
                 if (!_showBookmarks)
                   IconButton(
+                    tooltip: '刷新本页网评',
+                    icon: const Icon(
+                      Icons.stars_rounded,
+                      color: EmbyTheme.accentSecondary,
+                    ),
+                    onPressed: () async {
+                      final items = libraryAsync.valueOrNull ?? const [];
+                      if (items.isEmpty) return;
+                      final totalPages =
+                          ((items.length - 1) ~/ _pageSize) + 1;
+                      final safePage = _currentPage.clamp(1, totalPages);
+                      final pageItems = items
+                          .skip((safePage - 1) * _pageSize)
+                          .take(_pageSize)
+                          .toList();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('正在从 JavDB 批量获取本页影片评分...'),
+                          duration: Duration(seconds: 1),
+                        ),
+                      );
+                      final updated = await ref
+                          .read(mediaLibraryProvider.notifier)
+                          .refreshMissingRatings(pageItems);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              updated > 0
+                                  ? '已成功更新本页 $updated 部影片的 JavDB 网评！'
+                                  : '未获取到新评分（请确认番号格式正确且网络可访问 JavDB）',
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                if (!_showBookmarks)
+                  IconButton(
                     tooltip: '批量删除管理',
                     icon: const Icon(Icons.delete_sweep_outlined),
                     onPressed: () => setState(() => _selectionMode = true),

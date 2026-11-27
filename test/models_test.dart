@@ -1,6 +1,7 @@
 import 'package:emby_stream_vault/core/models/download_task.dart';
 import 'package:emby_stream_vault/core/models/media_item.dart';
 import 'package:emby_stream_vault/core/models/site_config.dart';
+import 'package:emby_stream_vault/core/services/rating_fetcher_service.dart';
 import 'package:emby_stream_vault/core/services/web_metadata_extractor_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -67,6 +68,42 @@ void main() {
       ''';
       final tags = WebMetadataExtractorService.extractTagsFromHtml(html);
       expect(tags, containsAll(['中出', '巨乳', 'Creampie']));
+    });
+  });
+
+  group('RatingFetcherService', () {
+    test('normalizeLookupCode handles missing hyphen and suffixes', () {
+      expect(RatingFetcherService.normalizeLookupCode('mimk134'), 'MIMK-134');
+      expect(
+          RatingFetcherService.normalizeLookupCode('MIMK-173-C'), 'MIMK-173');
+      expect(RatingFetcherService.normalizeLookupCode('ITEM-919142'), isNull);
+    });
+
+    test('parseJavdbSearchHtml ignores navbar query and matches exact card code',
+        () {
+      const mockHtml = '''
+        <nav>
+          <a class="navbar-item" href="/search?f=all&amp;q=MIMK-134&amp;theme=auto">跟隨系統</a>
+        </nav>
+        <div class="movie-list">
+          <div class="item">
+            <a href="/v/AbCdE" class="box">
+              <div class="video-title"><strong>MIMK-184</strong> 其他作品</div>
+              <div class="score"><span class="value">&nbsp;4.4分, 由546人評價</span></div>
+            </a>
+          </div>
+          <div class="item">
+            <a href="/v/XyZ12" class="box">
+              <div class="video-title"><strong>MIMK-134</strong> 目標作品</div>
+              <div class="score"><span class="value">&nbsp;4.3分, 由1671人評價</span></div>
+            </a>
+          </div>
+        </div>
+      ''';
+
+      final score =
+          RatingFetcherService.parseJavdbSearchHtml(mockHtml, 'MIMK-134');
+      expect(score, closeTo(4.3, 0.001));
     });
   });
 
