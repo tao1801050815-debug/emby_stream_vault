@@ -144,6 +144,25 @@ class AppPreferences {
   final bool enableSharpness;
   final bool blockPopupAds;
   final String customUserAgent;
+  // 纯手机端 AI 实时字幕配置（支持 Groq / 硅基流动 / OpenAI 兼容接口）
+  final String aiApiBaseUrl;
+  final String aiApiKey;
+  final String aiAsrModel;
+  final String aiSourceLang; // auto / ja / en
+  final bool aiBilingual;
+  // 应用自动更新与全能签软件源配置
+  final String updateFeedUrl;
+  final bool autoCheckUpdate;
+  // 主页排版模式：'missav'（两部并列）或 'pornhub'（单列整屏宽横卡）
+  final String libraryLayoutMode;
+  // 跨平台云同步配置（支持 GitHub 私有 Gist / WebDAV 坚果云或 NAS）
+  final String syncProvider; // 'gist' | 'webdav'
+  final String syncGistToken;
+  final String syncGistId;
+  final String syncWebDavUrl;
+  final String syncWebDavUser;
+  final String syncWebDavPass;
+  final int lastSyncAtMs;
 
   const AppPreferences({
     this.seekSeconds = 10,
@@ -152,6 +171,23 @@ class AppPreferences {
     this.enableSharpness = false,
     this.blockPopupAds = true,
     this.customUserAgent = '',
+    this.aiApiBaseUrl = 'https://api.groq.com/openai/v1',
+    this.aiApiKey = '',
+    this.aiAsrModel = 'whisper-large-v3-turbo',
+    this.aiSourceLang = 'ja',
+    this.aiBilingual = true,
+    this.updateFeedUrl =
+        'https://github.com/tao1801050815-debug/emby_stream_vault/releases/download/latest/apps.json',
+    this.autoCheckUpdate = true,
+    this.libraryLayoutMode = 'missav',
+    this.syncProvider = 'gist',
+    this.syncGistToken = '',
+    this.syncGistId = '',
+    this.syncWebDavUrl =
+        'https://dav.jianguoyun.com/dav/EmbyStreamVault/sync.json',
+    this.syncWebDavUser = '',
+    this.syncWebDavPass = '',
+    this.lastSyncAtMs = 0,
   });
 
   AppPreferences copyWith({
@@ -161,6 +197,21 @@ class AppPreferences {
     bool? enableSharpness,
     bool? blockPopupAds,
     String? customUserAgent,
+    String? aiApiBaseUrl,
+    String? aiApiKey,
+    String? aiAsrModel,
+    String? aiSourceLang,
+    bool? aiBilingual,
+    String? updateFeedUrl,
+    bool? autoCheckUpdate,
+    String? libraryLayoutMode,
+    String? syncProvider,
+    String? syncGistToken,
+    String? syncGistId,
+    String? syncWebDavUrl,
+    String? syncWebDavUser,
+    String? syncWebDavPass,
+    int? lastSyncAtMs,
   }) {
     return AppPreferences(
       seekSeconds: seekSeconds ?? this.seekSeconds,
@@ -169,6 +220,21 @@ class AppPreferences {
       enableSharpness: enableSharpness ?? this.enableSharpness,
       blockPopupAds: blockPopupAds ?? this.blockPopupAds,
       customUserAgent: customUserAgent ?? this.customUserAgent,
+      aiApiBaseUrl: aiApiBaseUrl ?? this.aiApiBaseUrl,
+      aiApiKey: aiApiKey ?? this.aiApiKey,
+      aiAsrModel: aiAsrModel ?? this.aiAsrModel,
+      aiSourceLang: aiSourceLang ?? this.aiSourceLang,
+      aiBilingual: aiBilingual ?? this.aiBilingual,
+      updateFeedUrl: updateFeedUrl ?? this.updateFeedUrl,
+      autoCheckUpdate: autoCheckUpdate ?? this.autoCheckUpdate,
+      libraryLayoutMode: libraryLayoutMode ?? this.libraryLayoutMode,
+      syncProvider: syncProvider ?? this.syncProvider,
+      syncGistToken: syncGistToken ?? this.syncGistToken,
+      syncGistId: syncGistId ?? this.syncGistId,
+      syncWebDavUrl: syncWebDavUrl ?? this.syncWebDavUrl,
+      syncWebDavUser: syncWebDavUser ?? this.syncWebDavUser,
+      syncWebDavPass: syncWebDavPass ?? this.syncWebDavPass,
+      lastSyncAtMs: lastSyncAtMs ?? this.lastSyncAtMs,
     );
   }
 }

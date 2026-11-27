@@ -3,8 +3,10 @@ import '../models/bookmark.dart';
 import '../models/download_task.dart';
 import '../models/media_item.dart';
 import '../models/site_config.dart';
+import '../services/live_ai_subtitle_service.dart';
 import '../services/m3u8_downloader_service.dart';
 import '../services/rating_fetcher_service.dart';
+import '../services/web_metadata_extractor_service.dart';
 import '../storage/database_helper.dart';
 import '../storage/settings_repository.dart';
 
@@ -135,6 +137,7 @@ final mediaLibraryProvider =
 class MediaLibraryNotifier extends StateNotifier<AsyncValue<List<MediaItem>>> {
   final LibraryFilter _filter;
   final String _javdbBaseUrl;
+  bool _autoBackfilledRatings = false;
 
   MediaLibraryNotifier(
     this._filter, {
@@ -153,9 +156,47 @@ class MediaLibraryNotifier extends StateNotifier<AsyncValue<List<MediaItem>>> {
         sortBy: _filter.sortBy,
       );
       state = AsyncValue.data(items);
+
+      // 首次加载时自动为缺少网评的已收藏影片在后台静默补齐评分
+      if (!_autoBackfilledRatings) {
+        _autoBackfilledRatings = true;
+        final missing = items
+            .where((i) =>
+                i.publicRating <= 0 &&
+                RatingFetcherService.instance.isStandardCode(i.code))
+            .take(16)
+            .toList();
+        if (missing.isNotEmpty) {
+          _fetchPublicRatingInBackground(missing);
+        }
+      }
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }
+  }
+
+  /// 手动一键批量刷新所有缺网评（或指定列表）的影片评分
+  Future<int> refreshMissingRatings(List<MediaItem> targets) async {
+    var successCount = 0;
+    for (final item in targets) {
+      if (!RatingFetcherService.instance.isStandardCode(item.code)) continue;
+      final res = await RatingFetcherService.instance.fetchPublicRating(
+        code: item.code,
+        javdbBaseUrl: _javdbBaseUrl,
+      );
+      if (res != null) {
+        await DatabaseHelper.instance.updatePublicRating(
+          id: item.id,
+          rating: res.rating,
+          source: res.source,
+        );
+        successCount++;
+      }
+    }
+    if (successCount > 0 && mounted) {
+      await refresh();
+    }
+    return successCount;
   }
 
   Future<void> saveItem(MediaItem item) async {
@@ -164,6 +205,9 @@ class MediaLibraryNotifier extends StateNotifier<AsyncValue<List<MediaItem>>> {
     if (item.publicRating <= 0 &&
         RatingFetcherService.instance.isStandardCode(item.code)) {
       _fetchPublicRatingInBackground([item]);
+    }
+    if (item.tags.isEmpty && item.sourceUrl.isNotEmpty) {
+      _enrichTagsInBackground([item]);
     }
   }
 
@@ -181,6 +225,39 @@ class MediaLibraryNotifier extends StateNotifier<AsyncValue<List<MediaItem>>> {
     if (needRating.isNotEmpty) {
       _fetchPublicRatingInBackground(needRating);
     }
+    final needTags = items
+        .where((i) => i.tags.isEmpty && i.sourceUrl.isNotEmpty)
+        .take(8)
+        .toList();
+    if (needTags.isNotEmpty) {
+      _enrichTagsInBackground(needTags);
+    }
+  }
+
+  Future<void> updateCumCount(String id, int count) async {
+    await DatabaseHelper.instance.updateCumCount(id: id, cumCount: count);
+    await refresh();
+  }
+
+  void _enrichTagsInBackground(List<MediaItem> items) {
+    Future(() async {
+      var updated = false;
+      for (final item in items) {
+        final meta = await WebMetadataExtractorService.instance
+            .extractFromUrl(item.sourceUrl);
+        if (meta.tags.isNotEmpty || meta.actors.isNotEmpty) {
+          await DatabaseHelper.instance.updateTagsAndActors(
+            id: item.id,
+            tags: meta.tags,
+            actors: meta.actors,
+          );
+          updated = true;
+        }
+      }
+      if (updated && mounted) {
+        await refresh();
+      }
+    });
   }
 
   Future<({double rating, String source})?> fetchPublicRatingNow(
@@ -226,11 +303,15 @@ class MediaLibraryNotifier extends StateNotifier<AsyncValue<List<MediaItem>>> {
 
   Future<void> deleteItem(String id) async {
     await DatabaseHelper.instance.deleteMediaItem(id);
+    await LiveAiSubtitleSession.deleteCachedSubtitle(id);
     await refresh();
   }
 
   Future<void> deleteItemsBatch(Iterable<String> ids) async {
     await DatabaseHelper.instance.deleteMediaItemsBatch(ids);
+    for (final id in ids) {
+      await LiveAiSubtitleSession.deleteCachedSubtitle(id);
+    }
     await refresh();
   }
 

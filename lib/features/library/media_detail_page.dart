@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/media_item.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/theme/emby_theme.dart';
+import '../../core/widgets/cum_count_badge.dart';
 import '../browser/webview_sniffer_page.dart';
 import '../player/enhanced_player_page.dart';
 
@@ -34,6 +35,8 @@ class _MediaDetailPageState extends ConsumerState<MediaDetailPage> {
 
   Future<void> _editMetadataDialog() async {
     final titleCtrl = TextEditingController(text: _item.title);
+    final posterCtrl = TextEditingController(text: _item.posterUrl);
+    final urlCtrl = TextEditingController(text: _item.sourceUrl);
     final actorsCtrl = TextEditingController(text: _item.actors.join(', '));
     final tagsCtrl = TextEditingController(text: _item.tags.join(', '));
     final studioCtrl = TextEditingController(text: _item.studio);
@@ -51,6 +54,16 @@ class _MediaDetailPageState extends ConsumerState<MediaDetailPage> {
                 controller: titleCtrl,
                 decoration: const InputDecoration(labelText: '影片标题'),
                 maxLines: 2,
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: posterCtrl,
+                decoration: const InputDecoration(labelText: '封面图 URL'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: urlCtrl,
+                decoration: const InputDecoration(labelText: '原片网址 URL'),
               ),
               const SizedBox(height: 10),
               TextField(
@@ -99,6 +112,8 @@ class _MediaDetailPageState extends ConsumerState<MediaDetailPage> {
       await _saveChanges(
         _item.copyWith(
           title: titleCtrl.text.trim(),
+          posterUrl: posterCtrl.text.trim(),
+          sourceUrl: urlCtrl.text.trim(),
           actors: splitCsv(actorsCtrl.text),
           tags: splitCsv(tagsCtrl.text),
           studio: studioCtrl.text.trim(),
@@ -110,6 +125,8 @@ class _MediaDetailPageState extends ConsumerState<MediaDetailPage> {
     }
 
     titleCtrl.dispose();
+    posterCtrl.dispose();
+    urlCtrl.dispose();
     actorsCtrl.dispose();
     tagsCtrl.dispose();
     studioCtrl.dispose();
@@ -254,6 +271,25 @@ class _MediaDetailPageState extends ConsumerState<MediaDetailPage> {
                                     style: const TextStyle(
                                       color: EmbyTheme.textPrimary,
                                       fontWeight: FontWeight.w600,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                              if (_item.isUncensored)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE91E63),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Text(
+                                    '无码版本',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
                                       fontSize: 11,
                                     ),
                                   ),
@@ -438,6 +474,40 @@ class _MediaDetailPageState extends ConsumerState<MediaDetailPage> {
                       },
                       icon: const Icon(Icons.refresh_rounded, size: 16),
                       label: const Text('刷新网评'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                // 射过次数记录（专属微缩图标 + 一键 +1 / 点击自定义）
+                Row(
+                  children: [
+                    const Text(
+                      '射过次数',
+                      style:
+                          TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(width: 12),
+                    CumCountBadge(
+                      count: _item.cumCount,
+                      compact: false,
+                      onChanged: (next) async {
+                        setState(() => _item = _item.copyWith(cumCount: next));
+                        await ref
+                            .read(mediaLibraryProvider.notifier)
+                            .updateCumCount(_item.id, next);
+                      },
+                    ),
+                    const SizedBox(width: 10),
+                    FilledButton.tonalIcon(
+                      onPressed: () async {
+                        final next = _item.cumCount + 1;
+                        setState(() => _item = _item.copyWith(cumCount: next));
+                        await ref
+                            .read(mediaLibraryProvider.notifier)
+                            .updateCumCount(_item.id, next);
+                      },
+                      icon: const Icon(Icons.add_rounded, size: 16),
+                      label: const Text('记一次 +1'),
                     ),
                   ],
                 ),

@@ -1,48 +1,94 @@
 # EmbyStreamVault
 
-跨平台（iOS / iPadOS / Android）私人 Emby 风格媒体库与增强流媒体播放器（Flutter）。
-
-## 核心功能
-
-1. **Emby 风格私人海报墙（`lib/features/library/`）**
-   - 深色毛玻璃主题，支持手机竖屏 2 列与平板横屏 4~5 列自适应布局
-   - 本地 SQLite 数据库存储个人收藏、1~5 星评分、个人备注、断点续播进度
-   - **元数据手动纠错与锁定**：修改标题/演员/标签/片商后自动锁定，防止被外部数据覆盖
-   - **多站点一键搜索跳转**：详情页一键跳至 MissAV / JavDB / Jable 搜索对应番号
-
-2. **内置嗅探浏览器与账号登录（`lib/features/browser/`）**
-   - 共享持久化 Cookie，支持直接登录 **MissAV / JavDB** 账号并手动过 Cloudflare 验证
-   - 自动监听页面 `.m3u8` / `.mp4` 视频流与 `.vtt` / `.srt` 字幕链接，并隐藏常见浮层广告
-   - 捕获视频流后一键 **原生播放**、**加入私人影库** 或 **离线缓存**
-
-3. **增强型原生播放器（`lib/features/player/`）**
-   - 基于 `media_kit` (`libmpv`) 内核，支持携带 `Referer` 与 `Cookie` 播放流媒体
-   - 支持 **断点续播**、**双击左右半屏快进/快退**、**长按 2.0x 临时倍速**、**单手控制栏模式**
-   - 支持 **加载本地外挂字幕** 及 **字幕时间轴偏移微调（`sub-delay`）**
-   - 支持 **画面锐化增强（`sharpen`）**
-
-4. **m3u8 离线缓存引擎（`lib/core/services/m3u8_downloader_service.dart`）**
-   - 自动解析 Master Playlist（挑选最高码率）并并发下载分片至本地，生成本地 `local.m3u8` 离线播放
-
-5. **自定义站点域名（`lib/features/settings/`）**
-   - 所有站点域名与登录页地址支持在 App 内热修改，无惧域名更换
+跨平台（iOS / iPadOS / Android）私人 Emby 风格媒体库、片源嗅探浏览器、增强原生播放器与纯手机端 AI 实时中文字幕应用（基于 Flutter 构建）。
 
 ---
 
-## 如何在没有 Mac 的情况下打包 iOS `.ipa` 和 Android `.apk`
+## 核心功能一览
 
-本项目已配置 GitHub Actions 云端自动编译流程（`.github/workflows/build.yml`）：
+### 1. 双风格分页私人影库（`lib/features/library/`）
+- **双布局一键切换**：
+  - **Pornhub 单列宽卡模式**：`16:9` 全宽高清大横卡，展示完整双行大标题、来源站点、女优及标签胶囊。
+  - **MissAV 双列并排模式**：两部片横向封面紧凑并排，完整保留横版封面比例。
+- **严格分页浏览**：每页固定 **8 部影片**，底部常驻页码分页条，翻页自动平滑回顶。
+- **封面四象限信息徽章**：
+  - 左上角：番号徽章 + **无码版本**高亮角标；
+  - 右上角：**网上评分（JavDB 自动抓取）** + **个人 1~5 星评分**；
+  - 右下角：纯代码绘制专属微缩计数图标 + **自定义计数**（点击即可快捷 `+1` / `-1` / 归零 / 手动输入任意次数）。
+- **多维排序与管理**：支持按最近收藏、次数最多、个人高分、网上高分、番号排序，支持长按快捷操作、批量多选删除与元数据纠错锁定。
+- **自定义网址添加收藏**：输入或粘贴任意视频网址，一键自动提取影片名称、高清封面（实时预览）、番号、来源与页面标签，所有字段均可自由修改。
+- **免登录网页书签夹**：对无需登录的站点一键收藏网页直达。
 
-1. 在 GitHub 创建一个新仓库（可设为 Private 私有仓库），将本目录推送上去：
-   ```bash
-   git init
-   git add .
-   git commit -m "feat: initial EmbyStreamVault app"
-   git branch -M main
-   git remote add origin https://github.com/<你的用户名>/<仓库名>.git
-   git push -u origin main
+### 2. 内置嗅探浏览器与精准选片（`lib/features/browser/`）
+- **共享持久化 Cookie**：支持直接登录 MissAV / JavDB 等站点账号并手动通过 Cloudflare 验证。
+- **可视化识别选片弹窗**：点击收藏时自动汇总当前正片与页面内识别到的全部影片（带封面、番号、标题与标签），支持弹窗内搜索定位、勾选单部或多部精准入库。
+- **MissAV 标签与版本隔离**：自动抓取页面自带标签（如中出、巨乳、无码流出、中文字幕等）；普通版与无码版独立隔离存储，原生播放精准锁定用户收藏版本的高画质流。
+- **可自由拖动与折叠的嗅探悬浮条**：支持全屏拖动或一键收起为迷你悬浮球，避免遮挡网页登录按钮。
+- **自由添加片源网站**：预置 MissAV、JavDB、Jable、Pornhub、xHamster、Hanime1、MoTV、糖心Vlog、Active1 (`active1.didktiekw.cc`)，并可在浏览器顶部或设置页随时增删改任意站点。
+
+### 3. 增强型原生播放器 & 纯手机端 AI 实时中文字幕（`lib/features/player/`）
+- 基于 `media_kit` (`libmpv`) 内核，自动携带 `Referer` 与 `Cookie` 播放流媒体。
+- 支持 **断点续播**、**双击快进/快退**、**长按 2.0x 临时倍速**、**单手模式**、**画面锐化**、**本地外挂字幕与时间轴偏移（`sub-delay`）**。
+- **纯手机端 AI 实时中文字幕**（`lib/core/services/live_ai_subtitle_service.dart`）：
+  - 无需电脑中转，直接按播放进度拉取最低码率音频分片送入云端语音识别（内置 **Groq 免费极速** / **硅基流动国内直连** / **OpenAI** 一键预设）并实时翻译为简体中文双语字幕；
+  - 已识别字幕按影片自动持久化到本地 JSON（仅数十 KB），下次打开同一部片自动秒现并跳过已识别片段；
+  - 支持单部影片删除字幕缓存、删片联动清理及设置页查看占用空间与一键清空。
+
+### 4. 自动抓取网上评分（`lib/core/services/rating_fetcher_service.dart`）
+- 收藏标准番号（支持漏写横杠如 `mimk134` 自动标准化为 `MIMK-134`）后自动从 JavDB 逐卡片精准匹配对应番号的评分；
+- 自动携带 `over18=1; locale=zh` 并共享 WebView Cookie，支持启动自动补齐老收藏评分与主页一键刷新当前页网评。
+
+### 5. 跨平台云同步与离线备份（`lib/core/services/cloud_sync_service.dart`）
+- 同步内容覆盖：**全部收藏影片、自定义计数、个人/网上评分、标签、笔记、观看进度、网页书签与自定义站点**。
+- 支持 3 种跨设备同步方式（iPhone / iPad / Android 全通用）：
+  1. **GitHub 私有 Gist（推荐）**：生成一个仅含 `gist` 权限的 Token，多台设备填同一个 Token 自动认领私密同步文件，支持双向智能合并（按最新时间择新 + 标签取并集）或以本机为准覆盖云端。
+  2. **WebDAV 云同步**：原生支持坚果云（国内直连免费）、Alist 与自建 NAS。
+  3. **离线剪贴板 JSON**：无需任何账号，一键导出/导入合并。
+
+### 6. m3u8 离线缓存引擎（`lib/core/services/m3u8_downloader_service.dart`）
+- 自动解析 Master Playlist（优先最高码率）并并发下载分片至本地，生成本地 `local.m3u8` 离线播放。
+
+---
+
+## GitHub Actions 云端自动编译 & 全能签软件源一键更新
+
+本项目已配置完整的 GitHub Actions 云端构建与发布工作流（`.github/workflows/build.yml`），无需 Mac 即可同时产出未签名 iOS `.ipa`、Android `.apk` 和标准软件源 `apps.json`。
+
+### 自动版本递增与 Release 发布
+每次向 `main` 分支推送代码后，Actions 会自动执行：
+1. `analyze_and_test`：运行 `flutter analyze --no-fatal-infos` 与 `flutter test` 单元测试；
+2. `build_android` & `build_ios_unsigned`：自动按运行号递增版本号（`v1.0.<run_number>`）打包双端安装包；
+3. `publish_release`：自动汇总最近 5 条更新说明生成标准软件源 `apps.json`，连同安装包发布到 GitHub Release `latest`。
+
+### 全能签 / 轻松签 / AltStore 一键更新配置
+1. 确保仓库为 **Public**（仅包含 App 源码，你的登录状态、影库收藏与 API Key 均只存在手机本地）。
+2. 在手机 **全能签 → 软件源 → 添加源** 中粘贴以下固定地址：
+   ```text
+   https://github.com/tao1801050815-debug/emby_stream_vault/releases/download/latest/apps.json
    ```
-2. 打开 GitHub 仓库的 **Actions** 标签页，等待工作流跑完（约 5~8 分钟）。
-3. 在构建产物（Artifacts）中直接下载：
-   - `EmbyStreamVault-iOS-Unsigned-IPA`（未签名 `.ipa`，用你自己的签名方式签完装进 iPhone/iPad）
-   - `EmbyStreamVault-Android-APK`（安卓 `.apk`）
+3. 以后每次推送新功能并构建完成后：
+   - 打开 App 会自动弹窗提示**发现新版本与更新日志**；
+   - 切到全能签刷新软件源并点击「更新」，即可自动下载、重签并原地覆盖安装，所有本地数据完整保留。
+
+---
+
+## 目录结构
+
+```text
+lib/
+├── main.dart
+├── core/
+│   ├── models/          # MediaItem / SiteProfile / AppPreferences / BookmarkItem / DownloadTask
+│   ├── providers/       # Riverpod 全局状态管理
+│   ├── services/        # 评分抓取 / AI 实时字幕 / 网页元数据提取 / 云同步 / 更新检测 / m3u8 下载
+│   ├── storage/         # SQLite (v4 无损迁移) & SharedPreferences 持久化
+│   ├── theme/           # Emby 深色主题配色
+│   └── widgets/         # 自定义矢量计数微缩图标与交互徽章
+└── features/
+    ├── shell/           # 底部导航壳与启动自动更新检测
+    ├── library/         # Pornhub/MissAV 双布局分页主页 & 毛玻璃详情页
+    ├── browser/         # 内置嗅探浏览器、可拖动悬浮条与选片弹窗
+    ├── player/          # libmpv 增强播放器与双语实时字幕浮层
+    ├── downloads/       # 离线缓存任务管理页
+    └── settings/        # 站点管理、AI 字幕、跨平台云同步与更新设置页
+```

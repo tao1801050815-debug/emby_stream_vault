@@ -13,6 +13,7 @@ class MediaItem {
   final double personalRating; // 个人 0.0 ~ 5.0
   final double publicRating; // 网上大众评分（如 JavDB）
   final String publicRatingSource; // 评分来源（如 JavDB）
+  final int cumCount; // 射过次数（支持用户随时 +1 / 自定义输入）
   final String notes;
   final bool isFavorite;
   final bool isMetadataLocked; // 手动纠错锁定，防止后续同步覆盖
@@ -36,6 +37,7 @@ class MediaItem {
     this.personalRating = 0.0,
     this.publicRating = 0.0,
     this.publicRatingSource = '',
+    this.cumCount = 0,
     this.notes = '',
     this.isFavorite = false,
     this.isMetadataLocked = false,
@@ -53,6 +55,20 @@ class MediaItem {
     return (lastPositionSec / durationSec).clamp(0.0, 1.0);
   }
 
+  bool get isUncensored {
+    final lowerUrl = sourceUrl.toLowerCase();
+    final lowerTitle = title.toLowerCase();
+    if (lowerUrl.contains('uncensored') ||
+        lowerTitle.contains('uncensored') ||
+        title.contains('无码') ||
+        title.contains('無碼')) {
+      return true;
+    }
+    return tags.any(
+      (t) => t.contains('无码') || t.contains('無碼') || t.toLowerCase().contains('uncensored'),
+    );
+  }
+
   MediaItem copyWith({
     String? id,
     String? code,
@@ -65,6 +81,7 @@ class MediaItem {
     double? personalRating,
     double? publicRating,
     String? publicRatingSource,
+    int? cumCount,
     String? notes,
     bool? isFavorite,
     bool? isMetadataLocked,
@@ -88,6 +105,7 @@ class MediaItem {
       personalRating: personalRating ?? this.personalRating,
       publicRating: publicRating ?? this.publicRating,
       publicRatingSource: publicRatingSource ?? this.publicRatingSource,
+      cumCount: cumCount ?? this.cumCount,
       notes: notes ?? this.notes,
       isFavorite: isFavorite ?? this.isFavorite,
       isMetadataLocked: isMetadataLocked ?? this.isMetadataLocked,
@@ -114,6 +132,7 @@ class MediaItem {
       'personalRating': personalRating,
       'publicRating': publicRating,
       'publicRatingSource': publicRatingSource,
+      'cumCount': cumCount,
       'notes': notes,
       'isFavorite': isFavorite ? 1 : 0,
       'isMetadataLocked': isMetadataLocked ? 1 : 0,
@@ -140,6 +159,7 @@ class MediaItem {
       personalRating: ((map['personalRating'] as num?) ?? 0.0).toDouble(),
       publicRating: ((map['publicRating'] as num?) ?? 0.0).toDouble(),
       publicRatingSource: (map['publicRatingSource'] as String?) ?? '',
+      cumCount: ((map['cumCount'] as num?) ?? 0).toInt(),
       notes: (map['notes'] as String?) ?? '',
       isFavorite: (map['isFavorite'] as int? ?? 0) == 1,
       isMetadataLocked: (map['isMetadataLocked'] as int? ?? 0) == 1,

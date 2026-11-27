@@ -7,6 +7,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import '../../core/models/media_item.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/services/live_ai_subtitle_service.dart';
 import '../../core/theme/emby_theme.dart';
 
 /// 增强型原生播放器：断点续播 + 双击快进 + 长按倍速 + 外挂字幕与时间轴偏移 + 画面锐化
@@ -45,6 +46,12 @@ class _EnhancedPlayerPageState extends ConsumerState<EnhancedPlayerPage> {
   StreamSubscription<Duration>? _posSub;
   StreamSubscription<Duration>? _durSub;
 
+  // 纯手机端 AI 实时字幕状态
+  LiveAiSubtitleSession? _aiSession;
+  bool _aiSubtitleEnabled = false;
+  String _aiSubtitleStatus = '';
+  List<AiSubtitleCue> _aiCues = const [];
+
   @override
   void initState() {
     super.initState();
@@ -57,6 +64,7 @@ class _EnhancedPlayerPageState extends ConsumerState<EnhancedPlayerPage> {
 
     _posSub = _player.stream.position.listen((d) {
       if (mounted) setState(() => _position = d);
+      _aiSession?.updatePosition(d.inMilliseconds / 1000.0);
     });
     _durSub = _player.stream.duration.listen((d) {
       if (mounted) setState(() => _duration = d);
@@ -84,6 +92,16 @@ class _EnhancedPlayerPageState extends ConsumerState<EnhancedPlayerPage> {
       await _player.setSubtitleTrack(
         SubtitleTrack.uri(widget.initialSubtitleUrl!),
       );
+    }
+
+    // 自动加载本地已保存的 AI 字幕（对应时间点自动出现，无需重新识别）
+    final cachedCues =
+        await LiveAiSubtitleSession.loadCachedCues(widget.mediaItem.id);
+    if (cachedCues.isNotEmpty && mounted) {
+      setState(() {
+        _aiCues = cachedCues;
+      });
+      _showHud('已自动加载本地字幕（${cachedCues.length} 句）');
     }
 
     // 断点续播
@@ -155,6 +173,7 @@ class _EnhancedPlayerPageState extends ConsumerState<EnhancedPlayerPage> {
 
   @override
   void dispose() {
+    _aiSession?.dispose();
     _hudTimer?.cancel();
     _posSub?.cancel();
     _durSub?.cancel();
@@ -162,6 +181,58 @@ class _EnhancedPlayerPageState extends ConsumerState<EnhancedPlayerPage> {
     _player.dispose();
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     super.dispose();
+  }
+
+  Future<void> _toggleAiSubtitle() async {
+    if (_aiSubtitleEnabled) {
+      _aiSession?.dispose();
+      _aiSession = null;
+      setState(() {
+        _aiSubtitleEnabled = false;
+        _aiSubtitleStatus = '';
+      });
+      _showHud('已关闭 AI 实时字幕');
+      return;
+    }
+
+    final prefs = ref.read(appPreferencesProvider);
+    if (prefs.aiApiKey.trim().isEmpty) {
+      _showHud('请先到「设置 → AI 实时字幕」填写 API Key');
+      return;
+    }
+
+    setState(() {
+      _aiSubtitleEnabled = true;
+      _aiSubtitleStatus = '正在启动 AI 字幕...';
+    });
+
+    final session = LiveAiSubtitleSession(
+      mediaId: widget.mediaItem.id,
+      streamUrl: widget.streamUrl,
+      referer: widget.referer,
+      cookieHeader: widget.cookieHeader,
+      prefs: prefs,
+      onCuesUpdated: (cues) {
+        if (mounted) setState(() => _aiCues = cues);
+      },
+      onStatusChanged: (status) {
+        if (mounted) setState(() => _aiSubtitleStatus = status);
+      },
+    );
+    _aiSession = session;
+    await session.start(_position.inMilliseconds / 1000.0);
+  }
+
+  AiSubtitleCue? _activeAiCue() {
+    // 只要本地有已保存的字幕（或已开启实时识别），在对应时间点自动显示
+    if (_aiCues.isEmpty) return null;
+    final currentSec = (_position.inMilliseconds / 1000.0) - _subtitleDelaySec;
+    for (final cue in _aiCues) {
+      if (currentSec >= cue.startSec - 0.2 && currentSec <= cue.endSec + 0.4) {
+        return cue;
+      }
+    }
+    return null;
   }
 
   @override
@@ -179,6 +250,14 @@ class _EnhancedPlayerPageState extends ConsumerState<EnhancedPlayerPage> {
           style: const TextStyle(fontSize: 15),
         ),
         actions: [
+          IconButton(
+            tooltip: 'AI 实时中文字幕',
+            icon: Icon(
+              Icons.translate_rounded,
+              color: _aiSubtitleEnabled ? EmbyTheme.accent : Colors.white,
+            ),
+            onPressed: _toggleAiSubtitle,
+          ),
           IconButton(
             tooltip: '单手控制栏',
             icon: Icon(
@@ -264,6 +343,77 @@ class _EnhancedPlayerPageState extends ConsumerState<EnhancedPlayerPage> {
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                // 顶部 AI 实时字幕状态小徽章
+                if (_aiSubtitleEnabled && _aiSubtitleStatus.isNotEmpty)
+                  Positioned(
+                    top: 10,
+                    left: 12,
+                    child: IgnorePointer(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.65),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          _aiSubtitleStatus,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: EmbyTheme.accent,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                // 底部实时 AI 中文字幕浮层（支持双语与时间轴偏移）
+                if (_activeAiCue() case final cue?)
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    bottom: 24,
+                    child: IgnorePointer(
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.76),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                cue.translatedText,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.3,
+                                ),
+                              ),
+                              if (prefs.aiBilingual &&
+                                  cue.originalText.isNotEmpty &&
+                                  cue.originalText != cue.translatedText)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 3),
+                                  child: Text(
+                                    cue.originalText,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),

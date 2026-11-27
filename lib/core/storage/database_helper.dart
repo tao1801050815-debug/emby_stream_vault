@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import '../models/bookmark.dart';
@@ -22,7 +23,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'emby_stream_vault.db');
     return openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE media_items (
@@ -37,6 +38,7 @@ class DatabaseHelper {
             personalRating REAL DEFAULT 0.0,
             publicRating REAL DEFAULT 0.0,
             publicRatingSource TEXT DEFAULT '',
+            cumCount INTEGER DEFAULT 0,
             notes TEXT,
             isFavorite INTEGER DEFAULT 0,
             isMetadataLocked INTEGER DEFAULT 0,
@@ -83,6 +85,11 @@ class DatabaseHelper {
             "ALTER TABLE media_items ADD COLUMN publicRatingSource TEXT DEFAULT ''",
           );
         }
+        if (oldVersion < 4) {
+          await db.execute(
+            'ALTER TABLE media_items ADD COLUMN cumCount INTEGER DEFAULT 0',
+          );
+        }
       },
     );
   }
@@ -106,21 +113,62 @@ class DatabaseHelper {
   Future<void> upsertMediaItem(MediaItem item) async {
     final db = await database;
     final existing = await getMediaItemById(item.id);
-    if (existing != null && existing.isMetadataLocked && !item.isMetadataLocked) {
-      // 如果原记录已被用户手动纠错锁定，仅更新流地址与观看进度，保留手动修正的元数据
-      final merged = existing.copyWith(
-        lastStreamUrl: item.lastStreamUrl ?? existing.lastStreamUrl,
+    if (existing != null) {
+      if (existing.isMetadataLocked && !item.isMetadataLocked) {
+        // 如果原记录已被用户手动纠错锁定，仅更新流地址、观看进度与新增标签
+        final mergedTags = {
+          ...existing.tags,
+          ...item.tags,
+        }.toList();
+        final merged = existing.copyWith(
+          tags: mergedTags,
+          lastStreamUrl: item.lastStreamUrl ?? existing.lastStreamUrl,
+          publicRating: item.publicRating > 0
+              ? item.publicRating
+              : existing.publicRating,
+          publicRatingSource: item.publicRatingSource.isNotEmpty
+              ? item.publicRatingSource
+              : existing.publicRatingSource,
+          cumCount: item.cumCount > 0 ? item.cumCount : existing.cumCount,
+          lastPositionSec: item.lastPositionSec > 0
+              ? item.lastPositionSec
+              : existing.lastPositionSec,
+          durationSec:
+              item.durationSec > 0 ? item.durationSec : existing.durationSec,
+          updatedAtMs: DateTime.now().millisecondsSinceEpoch,
+        );
+        await db.insert(
+          'media_items',
+          merged.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+        return;
+      }
+
+      // 未锁定时，若重新嗅探收藏同一部影片，也保留用户已有的评分、次数、笔记与已抓到的标签
+      final merged = item.copyWith(
+        tags: {...existing.tags, ...item.tags}.toList(),
+        actors: item.actors.isNotEmpty ? item.actors : existing.actors,
+        posterUrl:
+            item.posterUrl.isNotEmpty ? item.posterUrl : existing.posterUrl,
+        personalRating: item.personalRating > 0
+            ? item.personalRating
+            : existing.personalRating,
         publicRating:
             item.publicRating > 0 ? item.publicRating : existing.publicRating,
         publicRatingSource: item.publicRatingSource.isNotEmpty
             ? item.publicRatingSource
             : existing.publicRatingSource,
+        cumCount: item.cumCount != existing.cumCount && item.cumCount > 0
+            ? item.cumCount
+            : existing.cumCount,
+        notes: item.notes.isNotEmpty ? item.notes : existing.notes,
+        lastStreamUrl: item.lastStreamUrl ?? existing.lastStreamUrl,
         lastPositionSec: item.lastPositionSec > 0
             ? item.lastPositionSec
             : existing.lastPositionSec,
         durationSec:
             item.durationSec > 0 ? item.durationSec : existing.durationSec,
-        updatedAtMs: DateTime.now().millisecondsSinceEpoch,
       );
       await db.insert(
         'media_items',
@@ -171,7 +219,9 @@ class DatabaseHelper {
     }
 
     final orderClause = switch (sortBy) {
-      'rating' => 'personalRating DESC, updatedAtMs DESC',
+      'rating' => 'personalRating DESC, publicRating DESC, updatedAtMs DESC',
+      'publicRating' => 'publicRating DESC, personalRating DESC, updatedAtMs DESC',
+      'cumCount' => 'cumCount DESC, updatedAtMs DESC',
       'code' => 'code ASC',
       _ => 'updatedAtMs DESC',
     };
@@ -228,6 +278,42 @@ class DatabaseHelper {
       {
         'publicRating': rating,
         'publicRatingSource': source,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> updateCumCount({
+    required String id,
+    required int cumCount,
+  }) async {
+    final db = await database;
+    await db.update(
+      'media_items',
+      {
+        'cumCount': cumCount < 0 ? 0 : cumCount,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> updateTagsAndActors({
+    required String id,
+    required List<String> tags,
+    required List<String> actors,
+  }) async {
+    final existing = await getMediaItemById(id);
+    if (existing == null) return;
+    final mergedTags = {...existing.tags, ...tags}.toList();
+    final mergedActors = existing.actors.isNotEmpty ? existing.actors : actors;
+    final db = await database;
+    await db.update(
+      'media_items',
+      {
+        'tags': jsonEncode(mergedTags),
+        'actors': jsonEncode(mergedActors),
       },
       where: 'id = ?',
       whereArgs: [id],
