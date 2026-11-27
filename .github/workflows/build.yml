@@ -35,7 +35,7 @@ jobs:
             flutter create --platforms=android --org dev.embystream .
           fi
       - run: flutter pub get
-           - name: Patch Android plugins for AGP 9 & SDK 36
+      - name: Patch Android plugins for AGP 9 & SDK 36
         run: |
           find ~/.pub-cache -path "*/flutter_inappwebview_android*/android/build.gradle" -exec sed -i 's/proguard-android\.txt/proguard-android-optimize.txt/g' {} +
           find ~/.pub-cache -path "*/file_picker*/android/build.gradle" -exec sed -i -E 's/compileSdk(Version)?[[:space:]]*=?[[:space:]]*34/compileSdk 36/g' {} +
