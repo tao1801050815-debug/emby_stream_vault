@@ -155,6 +155,14 @@ class AppPreferences {
   final bool autoCheckUpdate;
   // 主页排版模式：'missav'（两部并列）或 'pornhub'（单列整屏宽横卡）
   final String libraryLayoutMode;
+  // 跨平台云同步配置（支持 GitHub 私有 Gist / WebDAV 坚果云或 NAS）
+  final String syncProvider; // 'gist' | 'webdav'
+  final String syncGistToken;
+  final String syncGistId;
+  final String syncWebDavUrl;
+  final String syncWebDavUser;
+  final String syncWebDavPass;
+  final int lastSyncAtMs;
 
   const AppPreferences({
     this.seekSeconds = 10,
@@ -172,6 +180,14 @@ class AppPreferences {
         'https://github.com/tao1801050815-debug/emby_stream_vault/releases/download/latest/apps.json',
     this.autoCheckUpdate = true,
     this.libraryLayoutMode = 'missav',
+    this.syncProvider = 'gist',
+    this.syncGistToken = '',
+    this.syncGistId = '',
+    this.syncWebDavUrl =
+        'https://dav.jianguoyun.com/dav/EmbyStreamVault/sync.json',
+    this.syncWebDavUser = '',
+    this.syncWebDavPass = '',
+    this.lastSyncAtMs = 0,
   });
 
   AppPreferences copyWith({
@@ -189,6 +205,13 @@ class AppPreferences {
     String? updateFeedUrl,
     bool? autoCheckUpdate,
     String? libraryLayoutMode,
+    String? syncProvider,
+    String? syncGistToken,
+    String? syncGistId,
+    String? syncWebDavUrl,
+    String? syncWebDavUser,
+    String? syncWebDavPass,
+    int? lastSyncAtMs,
   }) {
     return AppPreferences(
       seekSeconds: seekSeconds ?? this.seekSeconds,
@@ -205,6 +228,13 @@ class AppPreferences {
       updateFeedUrl: updateFeedUrl ?? this.updateFeedUrl,
       autoCheckUpdate: autoCheckUpdate ?? this.autoCheckUpdate,
       libraryLayoutMode: libraryLayoutMode ?? this.libraryLayoutMode,
+      syncProvider: syncProvider ?? this.syncProvider,
+      syncGistToken: syncGistToken ?? this.syncGistToken,
+      syncGistId: syncGistId ?? this.syncGistId,
+      syncWebDavUrl: syncWebDavUrl ?? this.syncWebDavUrl,
+      syncWebDavUser: syncWebDavUser ?? this.syncWebDavUser,
+      syncWebDavPass: syncWebDavPass ?? this.syncWebDavPass,
+      lastSyncAtMs: lastSyncAtMs ?? this.lastSyncAtMs,
     );
   }
 }

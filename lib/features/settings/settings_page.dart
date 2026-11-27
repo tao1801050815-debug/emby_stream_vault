@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/site_config.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/services/app_update_service.dart';
+import '../../core/services/cloud_sync_service.dart';
 import '../../core/services/live_ai_subtitle_service.dart';
 import '../../core/theme/emby_theme.dart';
 import '../browser/webview_sniffer_page.dart';
@@ -187,6 +188,69 @@ class SettingsPage extends ConsumerWidget {
                   trailing: const Icon(Icons.cleaning_services_outlined,
                       color: EmbyTheme.danger),
                   onTap: () => _manageSubtitleCacheDialog(context),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          const _SectionHeader('跨平台云同步与备份（iOS / iPad / Android）'),
+          const SizedBox(height: 8),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  title: const Text('配置云同步账号'),
+                  subtitle: Text(
+                    prefs.syncProvider == 'webdav'
+                        ? (prefs.syncWebDavUser.isNotEmpty
+                            ? 'WebDAV · ${prefs.syncWebDavUser}'
+                            : 'WebDAV 未配置（支持坚果云国内直连 / Alist / NAS）')
+                        : (prefs.syncGistToken.isNotEmpty
+                            ? 'GitHub 私有 Gist · 已配置${prefs.syncGistId.isNotEmpty ? ' (${prefs.syncGistId.substring(0, prefs.syncGistId.length.clamp(0, 8))}...)' : ''}'
+                            : 'GitHub 私有 Gist 未配置（免费私密，全平台通用）'),
+                    style: const TextStyle(color: EmbyTheme.textSecondary),
+                  ),
+                  trailing: const Icon(Icons.cloud_outlined,
+                      color: EmbyTheme.accent),
+                  onTap: () => _editCloudSyncDialog(context, ref, prefs),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  title: const Text('立即双向合并同步'),
+                  subtitle: Text(
+                    prefs.lastSyncAtMs > 0
+                        ? '上次同步：${_formatSyncTime(prefs.lastSyncAtMs)}（合并影库、次数、评分、标签、书签与站点）'
+                        : '合并本机与云端收藏，两边新增都不会丢',
+                    style: const TextStyle(color: EmbyTheme.textSecondary),
+                  ),
+                  trailing: const Icon(Icons.sync_rounded,
+                      color: EmbyTheme.accent),
+                  onTap: () => _runCloudSync(
+                    context,
+                    ref,
+                    prefs,
+                    forcePushLocal: false,
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  title: const Text('以本机为准覆盖云端'),
+                  subtitle: const Text('当你删除了部分收藏、希望把删除结果同步到云端时使用'),
+                  trailing: const Icon(Icons.cloud_upload_outlined,
+                      color: EmbyTheme.warning),
+                  onTap: () => _runCloudSync(
+                    context,
+                    ref,
+                    prefs,
+                    forcePushLocal: true,
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  title: const Text('离线备份：导出 / 导入剪贴板 JSON'),
+                  subtitle: const Text('无需账号，隔空投送或发给自己即可跨设备秒传全部收藏'),
+                  trailing: const Icon(Icons.import_export_rounded),
+                  onTap: () => _offlineBackupSheet(context, ref),
                 ),
               ],
             ),
@@ -387,6 +451,237 @@ class SettingsPage extends ConsumerWidget {
         );
       }
     }
+  }
+
+  String _formatSyncTime(int ms) {
+    final dt = DateTime.fromMillisecondsSinceEpoch(ms);
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${dt.year}-${two(dt.month)}-${two(dt.day)} ${two(dt.hour)}:${two(dt.minute)}';
+  }
+
+  Future<void> _editCloudSyncDialog(
+    BuildContext context,
+    WidgetRef ref,
+    AppPreferences prefs,
+  ) async {
+    var provider = prefs.syncProvider;
+    final tokenCtrl = TextEditingController(text: prefs.syncGistToken);
+    final gistIdCtrl = TextEditingController(text: prefs.syncGistId);
+    final davUrlCtrl = TextEditingController(text: prefs.syncWebDavUrl);
+    final davUserCtrl = TextEditingController(text: prefs.syncWebDavUser);
+    final davPassCtrl = TextEditingController(text: prefs.syncWebDavPass);
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => AlertDialog(
+          title: const Text('配置跨平台云同步'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('GitHub 私有 Gist'),
+                      selected: provider == 'gist',
+                      onSelected: (_) =>
+                          setModalState(() => provider = 'gist'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('WebDAV (坚果云/NAS)'),
+                      selected: provider == 'webdav',
+                      onSelected: (_) =>
+                          setModalState(() => provider = 'webdav'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (provider == 'gist') ...[
+                  const Text(
+                    '在 GitHub → Settings → Developer settings → Personal access tokens (classic) 生成一个仅勾选 gist 权限的 Token，多台设备填同一个 Token 即可自动发现并同步私有数据。',
+                    style:
+                        TextStyle(fontSize: 12, color: EmbyTheme.textSecondary),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: tokenCtrl,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'GitHub Token (ghp_...)',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: gistIdCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Gist ID（留空会自动创建/自动认领）',
+                    ),
+                  ),
+                ] else ...[
+                  const Text(
+                    '国内推荐坚果云（免费）：网页端「账户信息 → 安全选项 → 添加应用密码」，把地址、邮箱和应用密码填在下方即可直连同步。',
+                    style:
+                        TextStyle(fontSize: 12, color: EmbyTheme.textSecondary),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: davUrlCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'WebDAV 同步文件地址',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: davUserCtrl,
+                    decoration: const InputDecoration(labelText: '账号 / 邮箱'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: davPassCtrl,
+                    obscureText: true,
+                    decoration: const InputDecoration(labelText: '应用密码'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('保存配置'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (saved == true) {
+      await ref.read(appPreferencesProvider.notifier).update(
+            prefs.copyWith(
+              syncProvider: provider,
+              syncGistToken: tokenCtrl.text.trim(),
+              syncGistId: gistIdCtrl.text.trim(),
+              syncWebDavUrl: davUrlCtrl.text.trim(),
+              syncWebDavUser: davUserCtrl.text.trim(),
+              syncWebDavPass: davPassCtrl.text.trim(),
+            ),
+          );
+    }
+    tokenCtrl.dispose();
+    gistIdCtrl.dispose();
+    davUrlCtrl.dispose();
+    davUserCtrl.dispose();
+    davPassCtrl.dispose();
+  }
+
+  Future<void> _runCloudSync(
+    BuildContext context,
+    WidgetRef ref,
+    AppPreferences prefs, {
+    required bool forcePushLocal,
+  }) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          forcePushLocal ? '正在以本机数据覆盖云端...' : '正在与云端双向合并同步...',
+        ),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+    final res = await CloudSyncService.instance.syncNow(
+      prefs,
+      forcePushLocal: forcePushLocal,
+    );
+    if (res.success) {
+      await ref.read(appPreferencesProvider.notifier).update(
+            prefs.copyWith(
+              syncGistId: (res.resolvedGistId != null &&
+                      res.resolvedGistId!.isNotEmpty)
+                  ? res.resolvedGistId
+                  : prefs.syncGistId,
+              lastSyncAtMs: DateTime.now().millisecondsSinceEpoch,
+            ),
+          );
+      await ref.read(mediaLibraryProvider.notifier).refresh();
+      await ref.read(bookmarksProvider.notifier).refresh();
+      ref.invalidate(siteProfilesProvider);
+    }
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(res.message)),
+      );
+    }
+  }
+
+  Future<void> _offlineBackupSheet(BuildContext context, WidgetRef ref) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: EmbyTheme.surface,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.copy_all_rounded,
+                  color: EmbyTheme.accent),
+              title: const Text('导出全部收藏到剪贴板 (JSON)'),
+              subtitle: const Text('复制后发给另一台设备即可一键恢复'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final jsonStr =
+                    await CloudSyncService.instance.exportLocalSnapshotJson();
+                await Clipboard.setData(ClipboardData(text: jsonStr));
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('已将全部收藏、评分、次数、书签和站点导出到剪贴板！'),
+                    ),
+                  );
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.content_paste_go_rounded,
+                  color: EmbyTheme.accentSecondary),
+              title: const Text('从剪贴板导入并合并'),
+              subtitle: const Text('保留本机现有收藏，自动合并剪贴板里的备份'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final clip = await Clipboard.getData('text/plain');
+                final raw = clip?.text?.trim() ?? '';
+                if (raw.isEmpty) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('剪贴板为空，请先复制导出的 JSON 备份')),
+                    );
+                  }
+                  return;
+                }
+                final res =
+                    await CloudSyncService.instance.importAndMergeJson(raw);
+                if (res.success) {
+                  await ref.read(mediaLibraryProvider.notifier).refresh();
+                  await ref.read(bookmarksProvider.notifier).refresh();
+                  ref.invalidate(siteProfilesProvider);
+                }
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(res.message)),
+                  );
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _checkUpdateNow(

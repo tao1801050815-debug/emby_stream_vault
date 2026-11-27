@@ -1,6 +1,7 @@
 import 'package:emby_stream_vault/core/models/download_task.dart';
 import 'package:emby_stream_vault/core/models/media_item.dart';
 import 'package:emby_stream_vault/core/models/site_config.dart';
+import 'package:emby_stream_vault/core/services/cloud_sync_service.dart';
 import 'package:emby_stream_vault/core/services/rating_fetcher_service.dart';
 import 'package:emby_stream_vault/core/services/web_metadata_extractor_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -104,6 +105,53 @@ void main() {
       final score =
           RatingFetcherService.parseJavdbSearchHtml(mockHtml, 'MIMK-134');
       expect(score, closeTo(4.3, 0.001));
+    });
+  });
+
+  group('CloudSyncService', () {
+    test('mergeMediaItems keeps both devices items and merges tags & cumCount',
+        () {
+      const local = [
+        MediaItem(
+          id: 'missav_MIMK-173',
+          code: 'MIMK-173',
+          title: 'Local Title',
+          tags: ['中出'],
+          cumCount: 3,
+          updatedAtMs: 1000,
+        ),
+        MediaItem(
+          id: 'missav_SSIS-001',
+          code: 'SSIS-001',
+          title: 'Only Local',
+          updatedAtMs: 1000,
+        ),
+      ];
+      const remote = [
+        MediaItem(
+          id: 'missav_MIMK-173',
+          code: 'MIMK-173',
+          title: 'Newer Remote Title',
+          tags: ['无码流出'],
+          publicRating: 4.25,
+          cumCount: 0,
+          updatedAtMs: 2000,
+        ),
+        MediaItem(
+          id: 'missav_MIMK-134',
+          code: 'MIMK-134',
+          title: 'Only Remote',
+          updatedAtMs: 1500,
+        ),
+      ];
+
+      final merged = CloudSyncService.mergeMediaItems(local, remote);
+      expect(merged.length, 3);
+      final mimk173 = merged.firstWhere((e) => e.id == 'missav_MIMK-173');
+      expect(mimk173.title, 'Newer Remote Title');
+      expect(mimk173.tags, containsAll(['中出', '无码流出']));
+      expect(mimk173.cumCount, 3);
+      expect(mimk173.publicRating, closeTo(4.25, 0.001));
     });
   });
 
