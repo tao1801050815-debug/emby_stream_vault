@@ -22,7 +22,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'emby_stream_vault.db');
     return openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE media_items (
@@ -35,6 +35,8 @@ class DatabaseHelper {
             studio TEXT,
             releaseDate TEXT,
             personalRating REAL DEFAULT 0.0,
+            publicRating REAL DEFAULT 0.0,
+            publicRatingSource TEXT DEFAULT '',
             notes TEXT,
             isFavorite INTEGER DEFAULT 0,
             isMetadataLocked INTEGER DEFAULT 0,
@@ -73,6 +75,14 @@ class DatabaseHelper {
         if (oldVersion < 2) {
           await _createBookmarksTable(db);
         }
+        if (oldVersion < 3) {
+          await db.execute(
+            'ALTER TABLE media_items ADD COLUMN publicRating REAL DEFAULT 0.0',
+          );
+          await db.execute(
+            "ALTER TABLE media_items ADD COLUMN publicRatingSource TEXT DEFAULT ''",
+          );
+        }
       },
     );
   }
@@ -100,6 +110,11 @@ class DatabaseHelper {
       // 如果原记录已被用户手动纠错锁定，仅更新流地址与观看进度，保留手动修正的元数据
       final merged = existing.copyWith(
         lastStreamUrl: item.lastStreamUrl ?? existing.lastStreamUrl,
+        publicRating:
+            item.publicRating > 0 ? item.publicRating : existing.publicRating,
+        publicRatingSource: item.publicRatingSource.isNotEmpty
+            ? item.publicRatingSource
+            : existing.publicRatingSource,
         lastPositionSec: item.lastPositionSec > 0
             ? item.lastPositionSec
             : existing.lastPositionSec,
@@ -191,6 +206,32 @@ class DatabaseHelper {
   Future<void> deleteMediaItem(String id) async {
     final db = await database;
     await db.delete('media_items', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> deleteMediaItemsBatch(Iterable<String> ids) async {
+    final db = await database;
+    final batch = db.batch();
+    for (final id in ids) {
+      batch.delete('media_items', where: 'id = ?', whereArgs: [id]);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  Future<void> updatePublicRating({
+    required String id,
+    required double rating,
+    required String source,
+  }) async {
+    final db = await database;
+    await db.update(
+      'media_items',
+      {
+        'publicRating': rating,
+        'publicRatingSource': source,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   // ---- DownloadTask CRUD ----

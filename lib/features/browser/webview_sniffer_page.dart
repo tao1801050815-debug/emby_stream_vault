@@ -76,6 +76,8 @@ class _WebViewSnifferPageState extends ConsumerState<WebViewSnifferPage> {
   double _progress = 0;
   bool _canGoBack = false;
   SniffedMediaInfo _sniffed = const SniffedMediaInfo();
+  Offset? _snifferPos; // 可自由拖动的位置
+  bool _snifferCollapsed = false; // 是否折叠成迷你悬浮球
 
   static const _adHostKeywords = [
     'doubleclick.net',
@@ -555,93 +557,137 @@ class _WebViewSnifferPageState extends ConsumerState<WebViewSnifferPage> {
               color: EmbyTheme.accent,
             ),
           Expanded(
-            child: Stack(
-              children: [
-                InAppWebView(
-                  initialUrlRequest: URLRequest(url: WebUri(startUrl)),
-                  initialSettings: InAppWebViewSettings(
-                    javaScriptEnabled: true,
-                    mediaPlaybackRequiresUserGesture: false,
-                    allowsInlineMediaPlayback: true,
-                    sharedCookiesEnabled: true,
-                    useShouldOverrideUrlLoading: true,
-                    useOnLoadResource: true,
-                    userAgent: prefs.customUserAgent.isNotEmpty
-                        ? prefs.customUserAgent
-                        : null,
-                  ),
-                  onWebViewCreated: (controller) {
-                    _controller = controller;
-                  },
-                  onLoadStart: (controller, url) {
-                    final u = url?.toString() ?? '';
-                    _urlController.text = u;
-                    setState(() {
-                      _sniffed = SniffedMediaInfo(pageUrl: u);
-                    });
-                  },
-                  onProgressChanged: (_, progress) {
-                    setState(() => _progress = progress / 100.0);
-                  },
-                  onLoadStop: (controller, url) async {
-                    final canBack = await controller.canGoBack();
-                    if (mounted) {
-                      setState(() => _canGoBack = canBack);
-                    }
-                    await _extractPageMetadata(controller);
-                  },
-                  shouldOverrideUrlLoading: (controller, action) async {
-                    final target = action.request.url?.toString() ?? '';
-                    if (prefs.blockPopupAds &&
-                        _adHostKeywords.any((k) => target.contains(k))) {
-                      return NavigationActionPolicy.CANCEL;
-                    }
-                    return NavigationActionPolicy.ALLOW;
-                  },
-                  onLoadResource: (controller, resource) {
-                    final resUrl = resource.url.toString();
-                    final lower = resUrl.toLowerCase();
-                    // 过滤列表页缩略图悬停预览小视频，避免在收藏列表页误报捕获正片流
-                    final isPreviewClip = lower.contains('preview') ||
-                        lower.contains('thumb') ||
-                        lower.contains('trailer') ||
-                        lower.contains('teaser') ||
-                        lower.contains('_t.mp4');
-                    if ((lower.contains('.m3u8') || lower.contains('.mp4')) &&
-                        !isPreviewClip) {
-                      if (!_sniffed.streamUrls.contains(resUrl)) {
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final barWidth = _snifferCollapsed
+                    ? 56.0
+                    : (constraints.maxWidth - 24).clamp(240.0, 440.0);
+                const barHeight = 64.0;
+                final defaultLeft = _snifferCollapsed
+                    ? constraints.maxWidth - 68.0
+                    : (constraints.maxWidth - barWidth) / 2;
+                final defaultTop = (constraints.maxHeight - barHeight - 16.0)
+                    .clamp(8.0, constraints.maxHeight - barHeight);
+                final currentLeft = (_snifferPos?.dx ?? defaultLeft)
+                    .clamp(8.0, (constraints.maxWidth - barWidth - 8.0).clamp(8.0, constraints.maxWidth));
+                final currentTop = (_snifferPos?.dy ?? defaultTop)
+                    .clamp(8.0, (constraints.maxHeight - barHeight - 8.0).clamp(8.0, constraints.maxHeight));
+
+                return Stack(
+                  children: [
+                    InAppWebView(
+                      initialUrlRequest: URLRequest(url: WebUri(startUrl)),
+                      initialSettings: InAppWebViewSettings(
+                        javaScriptEnabled: true,
+                        mediaPlaybackRequiresUserGesture: false,
+                        allowsInlineMediaPlayback: true,
+                        sharedCookiesEnabled: true,
+                        useShouldOverrideUrlLoading: true,
+                        useOnLoadResource: true,
+                        userAgent: prefs.customUserAgent.isNotEmpty
+                            ? prefs.customUserAgent
+                            : null,
+                      ),
+                      onWebViewCreated: (controller) {
+                        _controller = controller;
+                      },
+                      onLoadStart: (controller, url) {
+                        final u = url?.toString() ?? '';
+                        _urlController.text = u;
                         setState(() {
-                          _sniffed = _sniffed.copyWith(
-                            streamUrls: [..._sniffed.streamUrls, resUrl],
-                          );
+                          _sniffed = SniffedMediaInfo(pageUrl: u);
                         });
-                      }
-                    } else if (lower.endsWith('.vtt') ||
-                        lower.endsWith('.srt') ||
-                        lower.endsWith('.ass')) {
-                      if (!_sniffed.subtitleUrls.contains(resUrl)) {
-                        setState(() {
-                          _sniffed = _sniffed.copyWith(
-                            subtitleUrls: [..._sniffed.subtitleUrls, resUrl],
-                          );
-                        });
-                      }
-                    }
-                  },
-                ),
-                // 底部 Emby 嗅探操作胶囊
-                Positioned(
-                  left: 12,
-                  right: 12,
-                  bottom: 12,
-                  child: _SnifferActionBar(
-                    sniffed: _sniffed,
-                    onSaveLibrary: () => _saveToLibrary(currentSite),
-                    onPlayStream: _openNativePlayer,
-                    onDownloadStream: _enqueueDownload,
-                  ),
-                ),
-              ],
+                      },
+                      onProgressChanged: (_, progress) {
+                        setState(() => _progress = progress / 100.0);
+                      },
+                      onLoadStop: (controller, url) async {
+                        final canBack = await controller.canGoBack();
+                        if (mounted) {
+                          setState(() => _canGoBack = canBack);
+                        }
+                        await _extractPageMetadata(controller);
+                      },
+                      shouldOverrideUrlLoading: (controller, action) async {
+                        final target = action.request.url?.toString() ?? '';
+                        if (prefs.blockPopupAds &&
+                            _adHostKeywords.any((k) => target.contains(k))) {
+                          return NavigationActionPolicy.CANCEL;
+                        }
+                        return NavigationActionPolicy.ALLOW;
+                      },
+                      onLoadResource: (controller, resource) {
+                        final resUrl = resource.url.toString();
+                        final lower = resUrl.toLowerCase();
+                        // 过滤列表页缩略图悬停预览小视频，避免在收藏列表页误报捕获正片流
+                        final isPreviewClip = lower.contains('preview') ||
+                            lower.contains('thumb') ||
+                            lower.contains('trailer') ||
+                            lower.contains('teaser') ||
+                            lower.contains('_t.mp4');
+                        if ((lower.contains('.m3u8') || lower.contains('.mp4')) &&
+                            !isPreviewClip) {
+                          if (!_sniffed.streamUrls.contains(resUrl)) {
+                            setState(() {
+                              _sniffed = _sniffed.copyWith(
+                                streamUrls: [..._sniffed.streamUrls, resUrl],
+                              );
+                            });
+                          }
+                        } else if (lower.endsWith('.vtt') ||
+                            lower.endsWith('.srt') ||
+                            lower.endsWith('.ass')) {
+                          if (!_sniffed.subtitleUrls.contains(resUrl)) {
+                            setState(() {
+                              _sniffed = _sniffed.copyWith(
+                                subtitleUrls: [
+                                  ..._sniffed.subtitleUrls,
+                                  resUrl,
+                                ],
+                              );
+                            });
+                          }
+                        }
+                      },
+                    ),
+                    // 可自由拖动 + 可折叠的 Emby 嗅探悬浮条
+                    Positioned(
+                      left: currentLeft,
+                      top: currentTop,
+                      width: barWidth,
+                      child: GestureDetector(
+                        onPanUpdate: (details) {
+                          setState(() {
+                            final nextX = (currentLeft + details.delta.dx)
+                                .clamp(
+                                    8.0,
+                                    (constraints.maxWidth - barWidth - 8.0)
+                                        .clamp(8.0, constraints.maxWidth));
+                            final nextY = (currentTop + details.delta.dy)
+                                .clamp(
+                                    8.0,
+                                    (constraints.maxHeight - barHeight - 8.0)
+                                        .clamp(8.0, constraints.maxHeight));
+                            _snifferPos = Offset(nextX, nextY);
+                          });
+                        },
+                        child: _SnifferActionBar(
+                          sniffed: _sniffed,
+                          collapsed: _snifferCollapsed,
+                          onToggleCollapse: () {
+                            setState(() {
+                              _snifferCollapsed = !_snifferCollapsed;
+                            });
+                          },
+                          onSaveLibrary: () => _saveToLibrary(currentSite),
+                          onPlayStream: _openNativePlayer,
+                          onDownloadStream: _enqueueDownload,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ],
@@ -652,12 +698,16 @@ class _WebViewSnifferPageState extends ConsumerState<WebViewSnifferPage> {
 
 class _SnifferActionBar extends StatelessWidget {
   final SniffedMediaInfo sniffed;
+  final bool collapsed;
+  final VoidCallback onToggleCollapse;
   final VoidCallback onSaveLibrary;
   final ValueChanged<String> onPlayStream;
   final ValueChanged<String> onDownloadStream;
 
   const _SnifferActionBar({
     required this.sniffed,
+    required this.collapsed,
+    required this.onToggleCollapse,
     required this.onSaveLibrary,
     required this.onPlayStream,
     required this.onDownloadStream,
@@ -666,15 +716,75 @@ class _SnifferActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasStream = sniffed.streamUrls.isNotEmpty;
+
+    if (collapsed) {
+      return GestureDetector(
+        onTap: onToggleCollapse,
+        child: Container(
+          width: 54,
+          height: 54,
+          decoration: BoxDecoration(
+            color: EmbyTheme.surfaceGlass,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: hasStream
+                  ? EmbyTheme.accent
+                  : Colors.white.withValues(alpha: 0.2),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.5),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(
+                hasStream
+                    ? Icons.play_circle_filled_rounded
+                    : Icons.radar_rounded,
+                color: hasStream ? EmbyTheme.accent : EmbyTheme.textPrimary,
+                size: 26,
+              ),
+              if (hasStream)
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    decoration: const BoxDecoration(
+                      color: EmbyTheme.accent,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      '${sniffed.streamUrls.length}',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: EmbyTheme.surfaceGlass,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: hasStream
               ? EmbyTheme.accent.withValues(alpha: 0.6)
-              : Colors.white.withValues(alpha: 0.12),
+              : Colors.white.withValues(alpha: 0.14),
         ),
         boxShadow: [
           BoxShadow(
@@ -686,11 +796,9 @@ class _SnifferActionBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(
-            hasStream ? Icons.play_circle_filled_rounded : Icons.radar_rounded,
-            color: hasStream ? EmbyTheme.accent : EmbyTheme.textSecondary,
-          ),
-          const SizedBox(width: 10),
+          const Icon(Icons.drag_indicator_rounded,
+              size: 18, color: EmbyTheme.textSecondary),
+          const SizedBox(width: 4),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -698,10 +806,12 @@ class _SnifferActionBar extends StatelessWidget {
               children: [
                 Text(
                   hasStream
-                      ? '已捕获 ${sniffed.streamUrls.length} 条视频流'
-                      : '正在监听页面视频流与字幕...',
+                      ? '已捕获 ${sniffed.streamUrls.length} 条流'
+                      : '可拖动 · 监听中...',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -718,27 +828,35 @@ class _SnifferActionBar extends StatelessWidget {
           ),
           IconButton(
             tooltip: '收藏到私人库',
-            icon: const Icon(Icons.bookmark_add_outlined),
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.bookmark_add_outlined, size: 20),
             onPressed: onSaveLibrary,
           ),
           if (hasStream) ...[
             IconButton(
               tooltip: '离线缓存',
-              icon: const Icon(Icons.download_for_offline_outlined),
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.download_for_offline_outlined, size: 20),
               onPressed: () => onDownloadStream(sniffed.streamUrls.first),
             ),
-            FilledButton.icon(
+            FilledButton(
               style: FilledButton.styleFrom(
                 backgroundColor: EmbyTheme.accent,
                 foregroundColor: Colors.black,
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                minimumSize: Size.zero,
               ),
               onPressed: () => onPlayStream(sniffed.streamUrls.first),
-              icon: const Icon(Icons.play_arrow_rounded, size: 18),
-              label: const Text('原生播放'),
+              child: const Text('播放', style: TextStyle(fontSize: 12)),
             ),
           ],
+          IconButton(
+            tooltip: '收起成悬浮球（防遮挡）',
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.close_fullscreen_rounded, size: 18),
+            onPressed: onToggleCollapse,
+          ),
         ],
       ),
     );

@@ -354,6 +354,69 @@ class _MediaDetailPageState extends ConsumerState<MediaDetailPage> {
                   }).toList(),
                 ),
                 const SizedBox(height: 20),
+                // 网上大众评分（自动从 JavDB 获取，支持手动刷新）
+                Row(
+                  children: [
+                    const Text(
+                      '网上评分',
+                      style:
+                          TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(width: 10),
+                    if (_item.publicRating > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: EmbyTheme.accentSecondary
+                              .withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '${_item.publicRatingSource.isNotEmpty ? _item.publicRatingSource : 'JavDB'} ${_item.publicRating.toStringAsFixed(2)} / 5.0',
+                          style: const TextStyle(
+                            color: EmbyTheme.accentSecondary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                        ),
+                      )
+                    else
+                      const Text(
+                        '暂无',
+                        style: TextStyle(
+                            fontSize: 12, color: EmbyTheme.textSecondary),
+                      ),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: () async {
+                        final res = await ref
+                            .read(mediaLibraryProvider.notifier)
+                            .fetchPublicRatingNow(_item);
+                        if (res != null && mounted) {
+                          setState(() {
+                            _item = _item.copyWith(
+                              publicRating: res.rating,
+                              publicRatingSource: res.source,
+                            );
+                          });
+                        } else if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content:
+                                  Text('未获取到 JavDB 评分（可能非标准番号或暂时被拦截）'),
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.refresh_rounded, size: 16),
+                      label: const Text('刷新网评'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 // 个人 1~5 星评分
                 const Text(
                   '个人评分',
