@@ -217,23 +217,48 @@ class _MediaDetailPageState extends ConsumerState<MediaDetailPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: EmbyTheme.accent.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              _item.code,
-                              style: const TextStyle(
-                                color: EmbyTheme.accent,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12,
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: EmbyTheme.accent.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  _item.code,
+                                  style: const TextStyle(
+                                    color: EmbyTheme.accent,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                  ),
+                                ),
                               ),
-                            ),
+                              if (_item.sourceSite.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    '来源: ${_item.sourceSite.toUpperCase()}',
+                                    style: const TextStyle(
+                                      color: EmbyTheme.textPrimary,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                           const SizedBox(height: 8),
                           Text(

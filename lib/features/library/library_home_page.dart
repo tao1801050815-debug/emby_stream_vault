@@ -575,18 +575,18 @@ class _PosterCard extends StatelessWidget {
                       height: 1.25,
                     ),
                   ),
-                  if (item.actors.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      item.actors.join(' · '),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: EmbyTheme.textSecondary,
-                      ),
+                  const SizedBox(height: 4),
+                  Text(
+                    item.actors.isNotEmpty
+                        ? '来源: ${item.sourceSite.toUpperCase()} · ${item.actors.join(' · ')}'
+                        : '来源: ${item.sourceSite.toUpperCase()}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: EmbyTheme.textSecondary,
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),
