@@ -117,11 +117,11 @@ class SiteProfile {
           loginUrl: 'https://tangxinvlog.app',
         ),
         SiteProfile(
-          key: 'ryxuxfoc',
-          name: 'Active1 (ryxuxfoc)',
-          baseUrl: 'https://active1.ryxuxfoc.cc',
+          key: 'didktiekw',
+          name: 'Active1 (didktiekw)',
+          baseUrl: 'https://active1.didktiekw.cc',
           searchTemplate: '{base}/search/{query}',
-          loginUrl: 'https://active1.ryxuxfoc.cc',
+          loginUrl: 'https://active1.didktiekw.cc',
         ),
       ];
 

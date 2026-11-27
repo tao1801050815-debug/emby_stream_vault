@@ -10,7 +10,9 @@ class MediaItem {
   final List<String> tags;
   final String studio;
   final String releaseDate;
-  final double personalRating; // 0.0 ~ 5.0
+  final double personalRating; // 个人 0.0 ~ 5.0
+  final double publicRating; // 网上大众评分（如 JavDB）
+  final String publicRatingSource; // 评分来源（如 JavDB）
   final String notes;
   final bool isFavorite;
   final bool isMetadataLocked; // 手动纠错锁定，防止后续同步覆盖
@@ -32,6 +34,8 @@ class MediaItem {
     this.studio = '',
     this.releaseDate = '',
     this.personalRating = 0.0,
+    this.publicRating = 0.0,
+    this.publicRatingSource = '',
     this.notes = '',
     this.isFavorite = false,
     this.isMetadataLocked = false,
@@ -59,6 +63,8 @@ class MediaItem {
     String? studio,
     String? releaseDate,
     double? personalRating,
+    double? publicRating,
+    String? publicRatingSource,
     String? notes,
     bool? isFavorite,
     bool? isMetadataLocked,
@@ -80,6 +86,8 @@ class MediaItem {
       studio: studio ?? this.studio,
       releaseDate: releaseDate ?? this.releaseDate,
       personalRating: personalRating ?? this.personalRating,
+      publicRating: publicRating ?? this.publicRating,
+      publicRatingSource: publicRatingSource ?? this.publicRatingSource,
       notes: notes ?? this.notes,
       isFavorite: isFavorite ?? this.isFavorite,
       isMetadataLocked: isMetadataLocked ?? this.isMetadataLocked,
@@ -104,6 +112,8 @@ class MediaItem {
       'studio': studio,
       'releaseDate': releaseDate,
       'personalRating': personalRating,
+      'publicRating': publicRating,
+      'publicRatingSource': publicRatingSource,
       'notes': notes,
       'isFavorite': isFavorite ? 1 : 0,
       'isMetadataLocked': isMetadataLocked ? 1 : 0,
@@ -128,6 +138,8 @@ class MediaItem {
       studio: (map['studio'] as String?) ?? '',
       releaseDate: (map['releaseDate'] as String?) ?? '',
       personalRating: ((map['personalRating'] as num?) ?? 0.0).toDouble(),
+      publicRating: ((map['publicRating'] as num?) ?? 0.0).toDouble(),
+      publicRatingSource: (map['publicRatingSource'] as String?) ?? '',
       notes: (map['notes'] as String?) ?? '',
       isFavorite: (map['isFavorite'] as int? ?? 0) == 1,
       isMetadataLocked: (map['isMetadataLocked'] as int? ?? 0) == 1,

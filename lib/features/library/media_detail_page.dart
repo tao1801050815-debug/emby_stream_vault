@@ -141,6 +141,36 @@ class _MediaDetailPageState extends ConsumerState<MediaDetailPage> {
             icon: const Icon(Icons.edit_note_rounded),
             onPressed: _editMetadataDialog,
           ),
+          IconButton(
+            tooltip: '删除此条目',
+            icon: const Icon(Icons.delete_outline_rounded,
+                color: EmbyTheme.danger),
+            onPressed: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('删除影片'),
+                  content: Text('确定从私人影库删除「${_item.code}」吗？'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('取消'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('删除'),
+                    ),
+                  ],
+                ),
+              );
+              if (confirm == true) {
+                await ref
+                    .read(mediaLibraryProvider.notifier)
+                    .deleteItem(_item.id);
+                if (context.mounted) Navigator.of(context).pop();
+              }
+            },
+          ),
         ],
       ),
       body: Stack(
@@ -187,23 +217,48 @@ class _MediaDetailPageState extends ConsumerState<MediaDetailPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: EmbyTheme.accent.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              _item.code,
-                              style: const TextStyle(
-                                color: EmbyTheme.accent,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12,
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: EmbyTheme.accent.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  _item.code,
+                                  style: const TextStyle(
+                                    color: EmbyTheme.accent,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                  ),
+                                ),
                               ),
-                            ),
+                              if (_item.sourceSite.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    '来源: ${_item.sourceSite.toUpperCase()}',
+                                    style: const TextStyle(
+                                      color: EmbyTheme.textPrimary,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                           const SizedBox(height: 8),
                           Text(
@@ -274,6 +329,26 @@ class _MediaDetailPageState extends ConsumerState<MediaDetailPage> {
                           ? '断点续播（已看 ${_item.lastPositionSec ~/ 60} 分钟）'
                           : '立即原生播放',
                     ),
+                  )
+                else if (_item.sourceUrl.isNotEmpty)
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: EmbyTheme.accent,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => WebViewSnifferPage(
+                            initialUrl: _item.sourceUrl,
+                            initialSiteKey: _item.sourceSite,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.play_circle_outline_rounded),
+                    label: const Text('打开原片页自动抓流播放'),
                   ),
                 const SizedBox(height: 14),
                 // 多站点一键直达嗅探
@@ -304,6 +379,69 @@ class _MediaDetailPageState extends ConsumerState<MediaDetailPage> {
                   }).toList(),
                 ),
                 const SizedBox(height: 20),
+                // 网上大众评分（自动从 JavDB 获取，支持手动刷新）
+                Row(
+                  children: [
+                    const Text(
+                      '网上评分',
+                      style:
+                          TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(width: 10),
+                    if (_item.publicRating > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: EmbyTheme.accentSecondary
+                              .withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '${_item.publicRatingSource.isNotEmpty ? _item.publicRatingSource : 'JavDB'} ${_item.publicRating.toStringAsFixed(2)} / 5.0',
+                          style: const TextStyle(
+                            color: EmbyTheme.accentSecondary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                        ),
+                      )
+                    else
+                      const Text(
+                        '暂无',
+                        style: TextStyle(
+                            fontSize: 12, color: EmbyTheme.textSecondary),
+                      ),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: () async {
+                        final res = await ref
+                            .read(mediaLibraryProvider.notifier)
+                            .fetchPublicRatingNow(_item);
+                        if (res != null && mounted) {
+                          setState(() {
+                            _item = _item.copyWith(
+                              publicRating: res.rating,
+                              publicRatingSource: res.source,
+                            );
+                          });
+                        } else if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content:
+                                  Text('未获取到 JavDB 评分（可能非标准番号或暂时被拦截）'),
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.refresh_rounded, size: 16),
+                      label: const Text('刷新网评'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 // 个人 1~5 星评分
                 const Text(
                   '个人评分',

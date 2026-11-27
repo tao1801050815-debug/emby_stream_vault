@@ -4,6 +4,7 @@ import '../models/download_task.dart';
 import '../models/media_item.dart';
 import '../models/site_config.dart';
 import '../services/m3u8_downloader_service.dart';
+import '../services/rating_fetcher_service.dart';
 import '../storage/database_helper.dart';
 import '../storage/settings_repository.dart';
 
@@ -23,7 +24,9 @@ class SiteProfilesNotifier extends StateNotifier<List<SiteProfile>> {
   }
 
   Future<void> _load() async {
-    final loaded = await _repo.loadSites();
+    final loaded = (await _repo.loadSites())
+        .where((e) => e.key != 'ryxuxfoc')
+        .toList();
     final existingKeys = loaded.map((e) => e.key).toSet();
     final missingDefaults = SiteProfile.defaults()
         .where((d) => !existingKeys.contains(d.key))
@@ -118,13 +121,26 @@ final mediaLibraryProvider =
     StateNotifierProvider<MediaLibraryNotifier, AsyncValue<List<MediaItem>>>(
         (ref) {
   final filter = ref.watch(libraryFilterProvider);
-  return MediaLibraryNotifier(filter);
+  final sites = ref.watch(siteProfilesProvider);
+  final javdbUrl = sites
+      .where((s) => s.key == 'javdb')
+      .map((s) => s.baseUrl)
+      .firstOrNull;
+  return MediaLibraryNotifier(
+    filter,
+    javdbBaseUrl: javdbUrl ?? 'https://javdb.com',
+  );
 });
 
 class MediaLibraryNotifier extends StateNotifier<AsyncValue<List<MediaItem>>> {
   final LibraryFilter _filter;
+  final String _javdbBaseUrl;
 
-  MediaLibraryNotifier(this._filter) : super(const AsyncValue.loading()) {
+  MediaLibraryNotifier(
+    this._filter, {
+    required String javdbBaseUrl,
+  })  : _javdbBaseUrl = javdbBaseUrl,
+        super(const AsyncValue.loading()) {
     refresh();
   }
 
@@ -145,10 +161,76 @@ class MediaLibraryNotifier extends StateNotifier<AsyncValue<List<MediaItem>>> {
   Future<void> saveItem(MediaItem item) async {
     await DatabaseHelper.instance.upsertMediaItem(item);
     await refresh();
+    if (item.publicRating <= 0 &&
+        RatingFetcherService.instance.isStandardCode(item.code)) {
+      _fetchPublicRatingInBackground([item]);
+    }
+  }
+
+  Future<void> saveItemsBatch(List<MediaItem> items) async {
+    for (final item in items) {
+      await DatabaseHelper.instance.upsertMediaItem(item);
+    }
+    await refresh();
+    final needRating = items
+        .where((i) =>
+            i.publicRating <= 0 &&
+            RatingFetcherService.instance.isStandardCode(i.code))
+        .take(12)
+        .toList();
+    if (needRating.isNotEmpty) {
+      _fetchPublicRatingInBackground(needRating);
+    }
+  }
+
+  Future<({double rating, String source})?> fetchPublicRatingNow(
+    MediaItem item,
+  ) async {
+    final result = await RatingFetcherService.instance.fetchPublicRating(
+      code: item.code,
+      javdbBaseUrl: _javdbBaseUrl,
+    );
+    if (result != null) {
+      await DatabaseHelper.instance.updatePublicRating(
+        id: item.id,
+        rating: result.rating,
+        source: result.source,
+      );
+      await refresh();
+    }
+    return result;
+  }
+
+  void _fetchPublicRatingInBackground(List<MediaItem> items) {
+    Future(() async {
+      var updated = false;
+      for (final item in items) {
+        final result = await RatingFetcherService.instance.fetchPublicRating(
+          code: item.code,
+          javdbBaseUrl: _javdbBaseUrl,
+        );
+        if (result != null) {
+          await DatabaseHelper.instance.updatePublicRating(
+            id: item.id,
+            rating: result.rating,
+            source: result.source,
+          );
+          updated = true;
+        }
+      }
+      if (updated && mounted) {
+        await refresh();
+      }
+    });
   }
 
   Future<void> deleteItem(String id) async {
     await DatabaseHelper.instance.deleteMediaItem(id);
+    await refresh();
+  }
+
+  Future<void> deleteItemsBatch(Iterable<String> ids) async {
+    await DatabaseHelper.instance.deleteMediaItemsBatch(ids);
     await refresh();
   }
 

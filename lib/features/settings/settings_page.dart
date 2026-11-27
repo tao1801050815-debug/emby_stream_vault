@@ -33,7 +33,16 @@ class SettingsPage extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const _SectionHeader('站点域名配置与账号登录'),
+          Row(
+            children: [
+              const Expanded(child: _SectionHeader('站点域名配置与账号登录')),
+              FilledButton.tonalIcon(
+                onPressed: () => _addSiteDialog(context, ref),
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('添加片源网站'),
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
           ...sites.map(
             (site) => Card(
@@ -189,38 +198,32 @@ class SettingsPage extends ConsumerWidget {
   }
 
   Future<void> _addSiteDialog(BuildContext context, WidgetRef ref) async {
-    final keyCtrl = TextEditingController();
     final nameCtrl = TextEditingController();
     final baseCtrl = TextEditingController();
     final searchCtrl = TextEditingController(text: '{base}/search/{query}');
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('添加自定义站点'),
+        title: const Text('添加自定义片源网站'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
-                controller: keyCtrl,
-                decoration: const InputDecoration(labelText: '英文标识 (如 mysite)'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
                 controller: nameCtrl,
-                decoration: const InputDecoration(labelText: '显示名称'),
+                decoration: const InputDecoration(labelText: '网站名称（如 新站点）'),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: baseCtrl,
                 decoration:
-                    const InputDecoration(labelText: '主域名 (如 https://xxx.com)'),
+                    const InputDecoration(labelText: '网站地址（如 https://xxx.com）'),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: searchCtrl,
                 decoration: const InputDecoration(
-                    labelText: '搜索模板 ({base}, {query})'),
+                    labelText: '搜索模板（可选，默认即可）'),
               ),
             ],
           ),
@@ -237,15 +240,28 @@ class SettingsPage extends ConsumerWidget {
         ],
       ),
     );
-    if (saved == true &&
-        keyCtrl.text.trim().isNotEmpty &&
-        baseCtrl.text.trim().isNotEmpty) {
-      final base = baseCtrl.text.trim();
-      final key = keyCtrl.text.trim().toLowerCase();
+    if (saved == true && baseCtrl.text.trim().isNotEmpty) {
+      var raw = baseCtrl.text.trim();
+      if (!raw.startsWith('http://') && !raw.startsWith('https://')) {
+        raw = 'https://$raw';
+      }
+      final base = raw.replaceAll(RegExp(r'/+$'), '');
+      final uri = Uri.tryParse(base);
+      final hostSlug = (uri?.host ?? 'site')
+          .replaceAll(RegExp(r'^www\.'), '')
+          .split('.')
+          .first
+          .replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '')
+          .toLowerCase();
+      final key = hostSlug.isNotEmpty
+          ? hostSlug
+          : 'site_${DateTime.now().millisecondsSinceEpoch % 10000}';
       await ref.read(siteProfilesProvider.notifier).addSite(
             SiteProfile(
               key: key,
-              name: nameCtrl.text.trim().isNotEmpty ? nameCtrl.text.trim() : key,
+              name: nameCtrl.text.trim().isNotEmpty
+                  ? nameCtrl.text.trim()
+                  : (uri?.host ?? key),
               baseUrl: base,
               searchTemplate: searchCtrl.text.trim().isNotEmpty
                   ? searchCtrl.text.trim()
@@ -254,7 +270,6 @@ class SettingsPage extends ConsumerWidget {
             ),
           );
     }
-    keyCtrl.dispose();
     nameCtrl.dispose();
     baseCtrl.dispose();
     searchCtrl.dispose();

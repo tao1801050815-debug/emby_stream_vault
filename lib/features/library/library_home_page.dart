@@ -17,6 +17,109 @@ class LibraryHomePage extends ConsumerStatefulWidget {
 
 class _LibraryHomePageState extends ConsumerState<LibraryHomePage> {
   bool _showBookmarks = false;
+  bool _selectionMode = false;
+  final Set<String> _selectedIds = {};
+
+  void _toggleSelect(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+        if (_selectedIds.isEmpty) _selectionMode = false;
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  Future<void> _confirmBatchDelete() async {
+    if (_selectedIds.isEmpty) return;
+    final count = _selectedIds.length;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('批量删除收藏'),
+        content: Text('确定从私人影库删除选中的 $count 部影片吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await ref
+          .read(mediaLibraryProvider.notifier)
+          .deleteItemsBatch(_selectedIds.toList());
+      setState(() {
+        _selectedIds.clear();
+        _selectionMode = false;
+      });
+    }
+  }
+
+  Future<void> _showCardActions(MediaItem item) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: EmbyTheme.surface,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.star_half_rounded,
+                  color: EmbyTheme.accentSecondary),
+              title: const Text('从 JavDB 获取/刷新网上评分'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final res = await ref
+                    .read(mediaLibraryProvider.notifier)
+                    .fetchPublicRatingNow(item);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        res != null
+                            ? '${item.code} 获取成功：${res.source} ${res.rating.toStringAsFixed(2)} 分'
+                            : '未能在 JavDB 找到 ${item.code} 的评分（可能非标准番号或触发验证）',
+                      ),
+                    ),
+                  );
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.checklist_rounded),
+              title: const Text('进入批量选择删除模式'),
+              onTap: () {
+                Navigator.pop(ctx);
+                setState(() {
+                  _selectionMode = true;
+                  _selectedIds.add(item.id);
+                });
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded,
+                  color: EmbyTheme.danger),
+              title: const Text('删除此收藏',
+                  style: TextStyle(color: EmbyTheme.danger)),
+              onTap: () async {
+                Navigator.pop(ctx);
+                await ref
+                    .read(mediaLibraryProvider.notifier)
+                    .deleteItem(item.id);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,19 +135,47 @@ class _LibraryHomePageState extends ConsumerState<LibraryHomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_showBookmarks ? '网页收藏夹（免登录）' : 'Emby 私人影库'),
-        actions: [
-          TextButton.icon(
-            onPressed: () => setState(() => _showBookmarks = !_showBookmarks),
-            icon: Icon(_showBookmarks ? Icons.movie_filter : Icons.bookmarks),
-            label: Text(_showBookmarks ? '切回影库' : '网页收藏'),
-          ),
-          IconButton(
-            tooltip: '手动录入影片',
-            icon: const Icon(Icons.add_box_outlined),
-            onPressed: () => _showAddManualDialog(context, ref),
-          ),
-        ],
+        title: Text(
+          _selectionMode
+              ? '已选 ${_selectedIds.length} 项'
+              : (_showBookmarks ? '网页收藏夹（免登录）' : 'Emby 私人影库'),
+        ),
+        actions: _selectionMode
+            ? [
+                TextButton(
+                  onPressed: () => setState(() {
+                    _selectionMode = false;
+                    _selectedIds.clear();
+                  }),
+                  child: const Text('取消'),
+                ),
+                IconButton(
+                  tooltip: '删除选中项',
+                  icon: const Icon(Icons.delete_forever_rounded,
+                      color: EmbyTheme.danger),
+                  onPressed: _confirmBatchDelete,
+                ),
+              ]
+            : [
+                TextButton.icon(
+                  onPressed: () =>
+                      setState(() => _showBookmarks = !_showBookmarks),
+                  icon: Icon(
+                      _showBookmarks ? Icons.movie_filter : Icons.bookmarks),
+                  label: Text(_showBookmarks ? '切回影库' : '网页收藏'),
+                ),
+                if (!_showBookmarks)
+                  IconButton(
+                    tooltip: '批量删除管理',
+                    icon: const Icon(Icons.delete_sweep_outlined),
+                    onPressed: () => setState(() => _selectionMode = true),
+                  ),
+                IconButton(
+                  tooltip: '手动录入影片',
+                  icon: const Icon(Icons.add_box_outlined),
+                  onPressed: () => _showAddManualDialog(context, ref),
+                ),
+              ],
       ),
       body: _showBookmarks
           ? (bookmarks.isEmpty
@@ -177,17 +308,28 @@ class _LibraryHomePageState extends ConsumerState<LibraryHomePage> {
                       childAspectRatio: 0.68,
                     ),
                     itemCount: items.length,
-                    itemBuilder: (_, idx) => _PosterCard(
-                      item: items[idx],
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                MediaDetailPage(initialItem: items[idx]),
-                          ),
-                        );
-                      },
-                    ),
+                    itemBuilder: (_, idx) {
+                      final item = items[idx];
+                      final isSelected = _selectedIds.contains(item.id);
+                      return _PosterCard(
+                        item: item,
+                        selectionMode: _selectionMode,
+                        selected: isSelected,
+                        onTap: () {
+                          if (_selectionMode) {
+                            _toggleSelect(item.id);
+                            return;
+                          }
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  MediaDetailPage(initialItem: item),
+                            ),
+                          );
+                        },
+                        onLongPress: () => _showCardActions(item),
+                      );
+                    },
                   ),
                 );
               },
@@ -263,19 +405,34 @@ class _LibraryHomePageState extends ConsumerState<LibraryHomePage> {
 
 class _PosterCard extends StatelessWidget {
   final MediaItem item;
+  final bool selectionMode;
+  final bool selected;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
-  const _PosterCard({required this.item, required this.onTap});
+  const _PosterCard({
+    required this.item,
+    required this.selectionMode,
+    required this.selected,
+    required this.onTap,
+    required this.onLongPress,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Container(
         decoration: BoxDecoration(
           color: EmbyTheme.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          border: Border.all(
+            color: selected
+                ? EmbyTheme.danger
+                : Colors.white.withValues(alpha: 0.08),
+            width: selected ? 2 : 1,
+          ),
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(
@@ -316,36 +473,75 @@ class _PosterCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  // 个人评分徽章
-                  if (item.personalRating > 0)
+                  // 右上角：多选勾选框 或 网上评分/个人评分徽章
+                  if (selectionMode)
                     Positioned(
                       top: 8,
                       right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: EmbyTheme.warning.withValues(alpha: 0.9),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.star_rounded,
-                                size: 12, color: Colors.black),
-                            const SizedBox(width: 2),
-                            Text(
-                              item.personalRating.toStringAsFixed(1),
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.black,
+                      child: Icon(
+                        selected
+                            ? Icons.check_circle_rounded
+                            : Icons.radio_button_unchecked_rounded,
+                        color: selected ? EmbyTheme.danger : Colors.white,
+                        size: 24,
+                      ),
+                    )
+                  else
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          if (item.publicRating > 0)
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: EmbyTheme.accentSecondary
+                                    .withValues(alpha: 0.92),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                '${item.publicRatingSource.isNotEmpty ? item.publicRatingSource : '网评'} ${item.publicRating.toStringAsFixed(1)}',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.black,
+                                ),
                               ),
                             ),
-                          ],
-                        ),
+                          if (item.personalRating > 0)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: EmbyTheme.warning.withValues(alpha: 0.9),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.star_rounded,
+                                      size: 12, color: Colors.black),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    item.personalRating.toStringAsFixed(1),
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.black,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   // 断点续播进度条
@@ -379,18 +575,18 @@ class _PosterCard extends StatelessWidget {
                       height: 1.25,
                     ),
                   ),
-                  if (item.actors.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      item.actors.join(' · '),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: EmbyTheme.textSecondary,
-                      ),
+                  const SizedBox(height: 4),
+                  Text(
+                    item.actors.isNotEmpty
+                        ? '来源: ${item.sourceSite.toUpperCase()} · ${item.actors.join(' · ')}'
+                        : '来源: ${item.sourceSite.toUpperCase()}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: EmbyTheme.textSecondary,
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),
