@@ -153,6 +153,8 @@ class AppPreferences {
   // 应用自动更新与全能签软件源配置
   final String updateFeedUrl;
   final bool autoCheckUpdate;
+  // 主页排版模式：'missav'（两部并列）或 'pornhub'（单列整屏宽横卡）
+  final String libraryLayoutMode;
 
   const AppPreferences({
     this.seekSeconds = 10,
@@ -169,6 +171,7 @@ class AppPreferences {
     this.updateFeedUrl =
         'https://github.com/tao1801050815-debug/emby_stream_vault/releases/download/latest/apps.json',
     this.autoCheckUpdate = true,
+    this.libraryLayoutMode = 'missav',
   });
 
   AppPreferences copyWith({
@@ -185,6 +188,7 @@ class AppPreferences {
     bool? aiBilingual,
     String? updateFeedUrl,
     bool? autoCheckUpdate,
+    String? libraryLayoutMode,
   }) {
     return AppPreferences(
       seekSeconds: seekSeconds ?? this.seekSeconds,
@@ -200,6 +204,7 @@ class AppPreferences {
       aiBilingual: aiBilingual ?? this.aiBilingual,
       updateFeedUrl: updateFeedUrl ?? this.updateFeedUrl,
       autoCheckUpdate: autoCheckUpdate ?? this.autoCheckUpdate,
+      libraryLayoutMode: libraryLayoutMode ?? this.libraryLayoutMode,
     );
   }
 }

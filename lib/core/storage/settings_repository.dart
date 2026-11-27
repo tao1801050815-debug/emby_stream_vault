@@ -17,6 +17,7 @@ class SettingsRepository {
   static const _aiBilingualKey = 'pref_ai_bilingual';
   static const _updateFeedUrlKey = 'pref_update_feed_url';
   static const _autoCheckUpdateKey = 'pref_auto_check_update';
+  static const _layoutModeKey = 'pref_library_layout_mode';
 
   Future<List<SiteProfile>> loadSites() async {
     final prefs = await SharedPreferences.getInstance();
@@ -55,6 +56,7 @@ class SettingsRepository {
       updateFeedUrl: prefs.getString(_updateFeedUrlKey) ??
           'https://github.com/tao1801050815-debug/emby_stream_vault/releases/download/latest/apps.json',
       autoCheckUpdate: prefs.getBool(_autoCheckUpdateKey) ?? true,
+      libraryLayoutMode: prefs.getString(_layoutModeKey) ?? 'missav',
     );
   }
 
@@ -73,5 +75,6 @@ class SettingsRepository {
     await prefs.setBool(_aiBilingualKey, value.aiBilingual);
     await prefs.setString(_updateFeedUrlKey, value.updateFeedUrl);
     await prefs.setBool(_autoCheckUpdateKey, value.autoCheckUpdate);
+    await prefs.setString(_layoutModeKey, value.libraryLayoutMode);
   }
 }

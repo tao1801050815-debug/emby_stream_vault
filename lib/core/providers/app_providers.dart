@@ -6,6 +6,7 @@ import '../models/site_config.dart';
 import '../services/live_ai_subtitle_service.dart';
 import '../services/m3u8_downloader_service.dart';
 import '../services/rating_fetcher_service.dart';
+import '../services/web_metadata_extractor_service.dart';
 import '../storage/database_helper.dart';
 import '../storage/settings_repository.dart';
 
@@ -166,6 +167,9 @@ class MediaLibraryNotifier extends StateNotifier<AsyncValue<List<MediaItem>>> {
         RatingFetcherService.instance.isStandardCode(item.code)) {
       _fetchPublicRatingInBackground([item]);
     }
+    if (item.tags.isEmpty && item.sourceUrl.isNotEmpty) {
+      _enrichTagsInBackground([item]);
+    }
   }
 
   Future<void> saveItemsBatch(List<MediaItem> items) async {
@@ -182,6 +186,39 @@ class MediaLibraryNotifier extends StateNotifier<AsyncValue<List<MediaItem>>> {
     if (needRating.isNotEmpty) {
       _fetchPublicRatingInBackground(needRating);
     }
+    final needTags = items
+        .where((i) => i.tags.isEmpty && i.sourceUrl.isNotEmpty)
+        .take(8)
+        .toList();
+    if (needTags.isNotEmpty) {
+      _enrichTagsInBackground(needTags);
+    }
+  }
+
+  Future<void> updateCumCount(String id, int count) async {
+    await DatabaseHelper.instance.updateCumCount(id: id, cumCount: count);
+    await refresh();
+  }
+
+  void _enrichTagsInBackground(List<MediaItem> items) {
+    Future(() async {
+      var updated = false;
+      for (final item in items) {
+        final meta = await WebMetadataExtractorService.instance
+            .extractFromUrl(item.sourceUrl);
+        if (meta.tags.isNotEmpty || meta.actors.isNotEmpty) {
+          await DatabaseHelper.instance.updateTagsAndActors(
+            id: item.id,
+            tags: meta.tags,
+            actors: meta.actors,
+          );
+          updated = true;
+        }
+      }
+      if (updated && mounted) {
+        await refresh();
+      }
+    });
   }
 
   Future<({double rating, String source})?> fetchPublicRatingNow(
