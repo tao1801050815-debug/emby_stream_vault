@@ -141,6 +141,36 @@ class _MediaDetailPageState extends ConsumerState<MediaDetailPage> {
             icon: const Icon(Icons.edit_note_rounded),
             onPressed: _editMetadataDialog,
           ),
+          IconButton(
+            tooltip: '删除此条目',
+            icon: const Icon(Icons.delete_outline_rounded,
+                color: EmbyTheme.danger),
+            onPressed: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('删除影片'),
+                  content: Text('确定从私人影库删除「${_item.code}」吗？'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('取消'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('删除'),
+                    ),
+                  ],
+                ),
+              );
+              if (confirm == true) {
+                await ref
+                    .read(mediaLibraryProvider.notifier)
+                    .deleteItem(_item.id);
+                if (context.mounted) Navigator.of(context).pop();
+              }
+            },
+          ),
         ],
       ),
       body: Stack(
@@ -274,6 +304,26 @@ class _MediaDetailPageState extends ConsumerState<MediaDetailPage> {
                           ? '断点续播（已看 ${_item.lastPositionSec ~/ 60} 分钟）'
                           : '立即原生播放',
                     ),
+                  )
+                else if (_item.sourceUrl.isNotEmpty)
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: EmbyTheme.accent,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => WebViewSnifferPage(
+                            initialUrl: _item.sourceUrl,
+                            initialSiteKey: _item.sourceSite,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.play_circle_outline_rounded),
+                    label: const Text('打开原片页自动抓流播放'),
                   ),
                 const SizedBox(height: 14),
                 // 多站点一键直达嗅探

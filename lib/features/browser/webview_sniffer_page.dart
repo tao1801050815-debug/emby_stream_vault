@@ -188,7 +188,17 @@ class _WebViewSnifferPageState extends ConsumerState<WebViewSnifferPage> {
     }
   }
 
-  Future<void> _saveToLibrary({String? overrideStreamUrl}) async {
+  Future<void> _saveToLibrary(SiteProfile currentSite,
+      {String? overrideStreamUrl}) async {
+    // 若当前页没有单个番号，先检测是否为收藏夹/列表页；若是则自动转为批量导入
+    if (_sniffed.code.isEmpty && _controller != null) {
+      final listItems = await _extractListItemsFromDom();
+      if (listItems.length >= 2) {
+        await _promptAndImportBatch(listItems);
+        return;
+      }
+    }
+
     final now = DateTime.now().millisecondsSinceEpoch;
     final code = _sniffed.code.isNotEmpty
         ? _sniffed.code
@@ -238,9 +248,9 @@ class _WebViewSnifferPageState extends ConsumerState<WebViewSnifferPage> {
     }
   }
 
-  /// 批量导入当前网页的影片列表（如 MissAV 收藏夹 /cn/saved、演员主页、合集列表）
-  Future<void> _batchImportCurrentPage(SiteProfile currentSite) async {
-    if (_controller == null) return;
+  /// 从当前网页 DOM 提取影片列表（兼容 MissAV / xHamster / Pornhub / JavDB / Hanime1）
+  Future<List<Map<String, dynamic>>> _extractListItemsFromDom() async {
+    if (_controller == null) return const [];
 
     const js = r'''
       (function() {
@@ -251,31 +261,41 @@ class _WebViewSnifferPageState extends ConsumerState<WebViewSnifferPage> {
           anchors.forEach(function(a) {
             var href = a.href || '';
             if (!href.startsWith('http') || seen[href]) return;
+            if (/\/(login|register|signup|account|saved|favorites|categories|tags|actors)(\/|\?|$)/i.test(href)) return;
+
             var img = a.querySelector('img');
             if (!img) return;
-            var poster = img.getAttribute('data-src') || img.getAttribute('data-original') || img.getAttribute('src') || '';
+            var poster = img.getAttribute('data-src') || img.getAttribute('data-original') || img.getAttribute('data-thumb_url') || img.getAttribute('src') || '';
             if (!poster || poster.startsWith('data:image')) return;
-            if (/avatar|logo|icon|banner/i.test(poster)) return;
+            if (/avatar|logo|icon|banner|sprite|flag/i.test(poster)) return;
 
             var card = a.closest('div, article, li') || a.parentElement;
             var title = (a.getAttribute('title') || img.getAttribute('alt') || '').trim();
             if (!title && card) {
-              var titleEl = card.querySelector('h2, h3, h4, .title, .video-title, a.text-secondary, a[alt]');
+              var titleEl = card.querySelector('h2, h3, h4, .title, .video-title, .video-thumb-info__name, a.text-secondary');
               if (titleEl) title = (titleEl.textContent || '').trim();
             }
             if (!title) title = (a.textContent || '').trim();
             title = title.replace(/\s+/g, ' ').trim();
 
+            var code = '';
             var codeMatch = (href + ' ' + title).match(/([A-Za-z]{2,6}-\d{2,5}|FC2-PPV-\d{5,7})/i);
-            var code = codeMatch ? codeMatch[1].toUpperCase() : '';
-            if (!code) {
+            if (codeMatch) {
+              code = codeMatch[1].toUpperCase();
+            } else if (/viewkey=([a-zA-Z0-9]+)/i.test(href)) {
+              code = 'PH-' + href.match(/viewkey=([a-zA-Z0-9]+)/i)[1].slice(0, 10).toUpperCase();
+            } else if (/xhamster\.com\/videos\/.*-([a-zA-Z0-9]+)$/i.test(href)) {
+              code = 'XH-' + href.match(/xhamster\.com\/videos\/.*-([a-zA-Z0-9]+)$/i)[1].slice(-8).toUpperCase();
+            } else if (/watch\?v=(\d+)/i.test(href)) {
+              code = 'HN-' + href.match(/watch\?v=(\d+)/i)[1];
+            } else {
               var segs = href.replace(/\/+$/, '').split('/');
-              var last = segs[segs.length - 1] || '';
-              if (last.length >= 3 && last.length <= 24 && !/\.(html|php)$/i.test(last)) {
-                code = last.toUpperCase();
+              var last = (segs[segs.length - 1] || '').split('?')[0];
+              if (last.length >= 3 && last.length <= 28 && !/\.(html|php)$/i.test(last)) {
+                code = last.slice(0, 18).toUpperCase();
               }
             }
-            if (!code || (!title && !code)) return;
+            if (!code) return;
 
             seen[href] = true;
             items.push({
@@ -304,42 +324,17 @@ class _WebViewSnifferPageState extends ConsumerState<WebViewSnifferPage> {
         }
       } catch (_) {}
     }
+    return parsed;
+  }
 
+  Future<void> _promptAndImportBatch(List<Map<String, dynamic>> parsed) async {
     if (!mounted) return;
-
-    if (parsed.isEmpty) {
-      final jumpToSaved = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('当前页未识别到影片列表'),
-          content: const Text(
-            '请先在内置浏览器中登录 MissAV 账号并打开你的收藏夹页面（或任意影片列表页），再点此按钮即可一键批量导入到 Emby 海报墙。',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('知道了'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('直达 MissAV 收藏夹'),
-            ),
-          ],
-        ),
-      );
-      if (jumpToSaved == true) {
-        final base = currentSite.baseUrl.replaceAll(RegExp(r'/+$'), '');
-        await _loadUrl('$base/cn/saved');
-      }
-      return;
-    }
-
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('识别到 ${parsed.length} 部影片'),
         content: Text(
-          '是否将本页的 ${parsed.length} 部影片全部导入到「Emby 私人影库」并标记为收藏？\n（已存在且手动锁定纠错的影片会自动保留你的修改）',
+          '当前是影片列表/收藏页！是否将这 ${parsed.length} 部影片分别拆出并导入到「Emby 私人影库」？\n（已存在且手动锁定纠错的影片会自动保留你的修改）',
         ),
         actions: [
           TextButton(
@@ -380,6 +375,42 @@ class _WebViewSnifferPageState extends ConsumerState<WebViewSnifferPage> {
         ),
       );
     }
+  }
+
+  /// 批量导入当前网页的影片列表（如 MissAV 收藏夹 /cn/saved、xHamster 收藏页、演员主页）
+  Future<void> _batchImportCurrentPage(SiteProfile currentSite) async {
+    if (_controller == null) return;
+    final parsed = await _extractListItemsFromDom();
+    if (!mounted) return;
+
+    if (parsed.isEmpty) {
+      final jumpToSaved = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('当前页未识别到影片列表'),
+          content: const Text(
+            '请先在内置浏览器中打开你的收藏夹页面（如 MissAV /cn/saved 或 xHamster 收藏页），再点此按钮即可一键批量导入到 Emby 海报墙。',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('知道了'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('直达 MissAV 收藏夹'),
+            ),
+          ],
+        ),
+      );
+      if (jumpToSaved == true) {
+        final base = currentSite.baseUrl.replaceAll(RegExp(r'/+$'), '');
+        await _loadUrl('$base/cn/saved');
+      }
+      return;
+    }
+
+    await _promptAndImportBatch(parsed);
   }
 
   Future<void> _openNativePlayer(String streamUrl) async {
@@ -570,7 +601,14 @@ class _WebViewSnifferPageState extends ConsumerState<WebViewSnifferPage> {
                   onLoadResource: (controller, resource) {
                     final resUrl = resource.url.toString();
                     final lower = resUrl.toLowerCase();
-                    if (lower.contains('.m3u8') || lower.contains('.mp4')) {
+                    // 过滤列表页缩略图悬停预览小视频，避免在收藏列表页误报捕获正片流
+                    final isPreviewClip = lower.contains('preview') ||
+                        lower.contains('thumb') ||
+                        lower.contains('trailer') ||
+                        lower.contains('teaser') ||
+                        lower.contains('_t.mp4');
+                    if ((lower.contains('.m3u8') || lower.contains('.mp4')) &&
+                        !isPreviewClip) {
                       if (!_sniffed.streamUrls.contains(resUrl)) {
                         setState(() {
                           _sniffed = _sniffed.copyWith(
@@ -598,7 +636,7 @@ class _WebViewSnifferPageState extends ConsumerState<WebViewSnifferPage> {
                   bottom: 12,
                   child: _SnifferActionBar(
                     sniffed: _sniffed,
-                    onSaveLibrary: () => _saveToLibrary(),
+                    onSaveLibrary: () => _saveToLibrary(currentSite),
                     onPlayStream: _openNativePlayer,
                     onDownloadStream: _enqueueDownload,
                   ),
