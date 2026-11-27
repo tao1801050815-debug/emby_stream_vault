@@ -1,0 +1,29 @@
+workflows:
+  ios-unsigned-ipa:
+    name: Build iOS Unsigned IPA
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      xcode: latest
+    scripts:
+      - name: Generate iOS platform wrapper & Info.plist
+        script: |
+          if [ ! -d "ios" ]; then
+            flutter create --platforms=ios --org dev.embystream .
+          fi
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" ios/Runner/Info.plist || true
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" ios/Runner/Info.plist || true
+          /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes array" ios/Runner/Info.plist || true
+          /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes:0 string audio" ios/Runner/Info.plist || true
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Build iOS release (no codesign)
+        script: flutter build ios --release --no-codesign
+      - name: Package unsigned IPA
+        script: |
+          mkdir -p build/ipa/Payload
+          cp -r build/ios/iphoneos/Runner.app build/ipa/Payload/
+          cd build/ipa && zip -r ../../EmbyStreamVault-unsigned.ipa Payload
+    artifacts:
+      - EmbyStreamVault-unsigned.ipa
