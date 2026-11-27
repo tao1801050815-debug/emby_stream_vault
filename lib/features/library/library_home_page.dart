@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/media_item.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/services/live_ai_subtitle_service.dart';
 import '../../core/theme/emby_theme.dart';
 import '../browser/webview_sniffer_page.dart';
 import 'media_detail_page.dart';
@@ -101,6 +102,26 @@ class _LibraryHomePageState extends ConsumerState<LibraryHomePage> {
                   _selectionMode = true;
                   _selectedIds.add(item.id);
                 });
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.subtitles_off_outlined),
+              title: const Text('删除该片本地 AI 字幕缓存'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final removed =
+                    await LiveAiSubtitleSession.deleteCachedSubtitle(item.id);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        removed
+                            ? '已清除 ${item.code} 的本地 AI 字幕缓存'
+                            : '${item.code} 暂无本地 AI 字幕缓存',
+                      ),
+                    ),
+                  );
+                }
               },
             ),
             ListTile(

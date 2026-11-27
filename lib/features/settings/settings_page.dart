@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/site_config.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/services/live_ai_subtitle_service.dart';
 import '../../core/theme/emby_theme.dart';
 import '../browser/webview_sniffer_page.dart';
 
@@ -177,6 +178,14 @@ class SettingsPage extends ConsumerWidget {
                       .read(appPreferencesProvider.notifier)
                       .update(prefs.copyWith(aiBilingual: v)),
                 ),
+                const Divider(height: 1),
+                ListTile(
+                  title: const Text('管理本地 AI 字幕缓存'),
+                  subtitle: const Text('查看占用空间或一键清空全部已保存字幕'),
+                  trailing: const Icon(Icons.cleaning_services_outlined,
+                      color: EmbyTheme.danger),
+                  onTap: () => _manageSubtitleCacheDialog(context),
+                ),
               ],
             ),
           ),
@@ -279,6 +288,42 @@ class SettingsPage extends ConsumerWidget {
     baseCtrl.dispose();
     keyCtrl.dispose();
     modelCtrl.dispose();
+  }
+
+  Future<void> _manageSubtitleCacheDialog(BuildContext context) async {
+    final stats = await LiveAiSubtitleSession.getCacheStats();
+    if (!context.mounted) return;
+    final kb = (stats.totalBytes / 1024).toStringAsFixed(1);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('本地 AI 字幕缓存'),
+        content: Text(
+          stats.count == 0
+              ? '当前没有本地 AI 字幕缓存。'
+              : '当前共缓存了 ${stats.count} 部影片的 AI 字幕，仅占用 $kb KB 空间。\n是否一键清空全部本地字幕缓存？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('关闭'),
+          ),
+          if (stats.count > 0)
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('全部清空'),
+            ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      final deleted = await LiveAiSubtitleSession.clearAllCachedSubtitles();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('已清空 $deleted 份本地 AI 字幕缓存')),
+        );
+      }
+    }
   }
 
   Future<void> _editSiteDialog(

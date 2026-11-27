@@ -3,6 +3,7 @@ import '../models/bookmark.dart';
 import '../models/download_task.dart';
 import '../models/media_item.dart';
 import '../models/site_config.dart';
+import '../services/live_ai_subtitle_service.dart';
 import '../services/m3u8_downloader_service.dart';
 import '../services/rating_fetcher_service.dart';
 import '../storage/database_helper.dart';
@@ -226,11 +227,15 @@ class MediaLibraryNotifier extends StateNotifier<AsyncValue<List<MediaItem>>> {
 
   Future<void> deleteItem(String id) async {
     await DatabaseHelper.instance.deleteMediaItem(id);
+    await LiveAiSubtitleSession.deleteCachedSubtitle(id);
     await refresh();
   }
 
   Future<void> deleteItemsBatch(Iterable<String> ids) async {
     await DatabaseHelper.instance.deleteMediaItemsBatch(ids);
+    for (final id in ids) {
+      await LiveAiSubtitleSession.deleteCachedSubtitle(id);
+    }
     await refresh();
   }
 

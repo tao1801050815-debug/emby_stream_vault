@@ -115,6 +115,56 @@ class LiveAiSubtitleSession {
     return const [];
   }
 
+  /// 删除单部影片的本地 AI 字幕缓存
+  static Future<bool> deleteCachedSubtitle(String mediaId) async {
+    if (mediaId.trim().isEmpty) return false;
+    try {
+      final file = await _cacheFileFor(mediaId);
+      if (await file.exists()) {
+        await file.delete();
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  /// 一键清空所有本地 AI 字幕缓存
+  static Future<int> clearAllCachedSubtitles() async {
+    var deleted = 0;
+    try {
+      final docDir = await getApplicationDocumentsDirectory();
+      final dir = Directory(p.join(docDir.path, 'ai_subtitles'));
+      if (await dir.exists()) {
+        await for (final entity in dir.list()) {
+          if (entity is File) {
+            await entity.delete();
+            deleted++;
+          }
+        }
+      }
+    } catch (_) {}
+    return deleted;
+  }
+
+  /// 统计本地 AI 字幕缓存数量与占用字节数
+  static Future<({int count, int totalBytes})> getCacheStats() async {
+    var count = 0;
+    var totalBytes = 0;
+    try {
+      final docDir = await getApplicationDocumentsDirectory();
+      final dir = Directory(p.join(docDir.path, 'ai_subtitles'));
+      if (await dir.exists()) {
+        await for (final entity in dir.list()) {
+          if (entity is File) {
+            count++;
+            totalBytes += await entity.length();
+          }
+        }
+      }
+    } catch (_) {}
+    return (count: count, totalBytes: totalBytes);
+  }
+
   Future<void> _loadLocalCacheIntoSession() async {
     if (mediaId.trim().isEmpty) return;
     try {
