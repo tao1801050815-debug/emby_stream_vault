@@ -8,6 +8,7 @@ import '../../core/services/cloud_sync_service.dart';
 import '../../core/services/live_ai_subtitle_service.dart';
 import '../../core/theme/emby_theme.dart';
 import '../browser/webview_sniffer_page.dart';
+import '../shell/app_lock_screen.dart';
 
 /// 站点域名热配置、账号登录入口与播放器偏好设置
 class SettingsPage extends ConsumerWidget {
@@ -252,6 +253,85 @@ class SettingsPage extends ConsumerWidget {
                   trailing: const Icon(Icons.import_export_rounded),
                   onTap: () => _offlineBackupSheet(context, ref),
                 ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          const _SectionHeader('隐私安全锁'),
+          const SizedBox(height: 8),
+          Card(
+            child: Column(
+              children: [
+                SwitchListTile(
+                  title: const Text('开启启动密码锁'),
+                  subtitle: Text(
+                    prefs.appLockEnabled
+                        ? '已开启（打开 App 时需输入 4~6 位数字密码）'
+                        : '未开启（点击开启并设置数字解锁密码）',
+                    style: const TextStyle(color: EmbyTheme.textSecondary),
+                  ),
+                  value: prefs.appLockEnabled,
+                  onChanged: (v) async {
+                    if (v) {
+                      final newHash = await AppLockScreen.showSetupPinDialog(
+                        context,
+                        title: '设置启动密码锁',
+                      );
+                      if (newHash != null) {
+                        await ref.read(appPreferencesProvider.notifier).update(
+                              prefs.copyWith(
+                                appLockEnabled: true,
+                                appLockPinHash: newHash,
+                              ),
+                            );
+                      }
+                    } else {
+                      final verified = await AppLockScreen.showVerifyPinDialog(
+                        context,
+                        expectedHash: prefs.appLockPinHash,
+                        title: '输入当前密码以关闭锁屏',
+                      );
+                      if (verified) {
+                        await ref.read(appPreferencesProvider.notifier).update(
+                              prefs.copyWith(appLockEnabled: false),
+                            );
+                      }
+                    }
+                  },
+                ),
+                if (prefs.appLockEnabled) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    title: const Text('修改解锁密码'),
+                    trailing: const Icon(Icons.password_rounded),
+                    onTap: () async {
+                      final newHash = await AppLockScreen.showSetupPinDialog(
+                        context,
+                        currentPinHash: prefs.appLockPinHash,
+                        title: '修改解锁密码',
+                      );
+                      if (newHash != null && context.mounted) {
+                        await ref.read(appPreferencesProvider.notifier).update(
+                              prefs.copyWith(appLockPinHash: newHash),
+                            );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('解锁密码已更新')),
+                          );
+                        }
+                      }
+                    },
+                  ),
+                  const Divider(height: 1),
+                  SwitchListTile(
+                    title: const Text('切到后台自动上锁 + 防窥遮罩'),
+                    subtitle: const Text('切出桌面或锁屏时隐藏预览卡片，返回需重新输密码'),
+                    value: prefs.lockOnBackground,
+                    onChanged: (v) => ref
+                        .read(appPreferencesProvider.notifier)
+                        .update(prefs.copyWith(lockOnBackground: v)),
+                  ),
+                ],
               ],
             ),
           ),

@@ -168,6 +168,10 @@ class AppPreferences {
   final double readerFontSize;
   final double readerLineHeight;
   final String readerThemeMode; // 'dark' | 'sepia' | 'green'
+  // 隐私安全锁配置
+  final bool appLockEnabled;
+  final String appLockPinHash;
+  final bool lockOnBackground;
 
   const AppPreferences({
     this.seekSeconds = 10,
@@ -197,6 +201,9 @@ class AppPreferences {
     this.readerFontSize = 17.5,
     this.readerLineHeight = 1.75,
     this.readerThemeMode = 'dark',
+    this.appLockEnabled = false,
+    this.appLockPinHash = '',
+    this.lockOnBackground = true,
   });
 
   AppPreferences copyWith({
@@ -225,6 +232,9 @@ class AppPreferences {
     double? readerFontSize,
     double? readerLineHeight,
     String? readerThemeMode,
+    bool? appLockEnabled,
+    String? appLockPinHash,
+    bool? lockOnBackground,
   }) {
     return AppPreferences(
       seekSeconds: seekSeconds ?? this.seekSeconds,
@@ -252,6 +262,9 @@ class AppPreferences {
       readerFontSize: readerFontSize ?? this.readerFontSize,
       readerLineHeight: readerLineHeight ?? this.readerLineHeight,
       readerThemeMode: readerThemeMode ?? this.readerThemeMode,
+      appLockEnabled: appLockEnabled ?? this.appLockEnabled,
+      appLockPinHash: appLockPinHash ?? this.appLockPinHash,
+      lockOnBackground: lockOnBackground ?? this.lockOnBackground,
     );
   }
 }

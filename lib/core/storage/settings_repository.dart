@@ -29,6 +29,9 @@ class SettingsRepository {
   static const _readerFontSizeKey = 'pref_reader_font_size';
   static const _readerLineHeightKey = 'pref_reader_line_height';
   static const _readerThemeModeKey = 'pref_reader_theme_mode';
+  static const _appLockEnabledKey = 'pref_app_lock_enabled';
+  static const _appLockPinHashKey = 'pref_app_lock_pin_hash';
+  static const _lockOnBgKey = 'pref_lock_on_background';
 
   Future<List<SiteProfile>> loadSites() async {
     final prefs = await SharedPreferences.getInstance();
@@ -81,6 +84,9 @@ class SettingsRepository {
       readerFontSize: prefs.getDouble(_readerFontSizeKey) ?? 17.5,
       readerLineHeight: prefs.getDouble(_readerLineHeightKey) ?? 1.75,
       readerThemeMode: prefs.getString(_readerThemeModeKey) ?? 'dark',
+      appLockEnabled: prefs.getBool(_appLockEnabledKey) ?? false,
+      appLockPinHash: prefs.getString(_appLockPinHashKey) ?? '',
+      lockOnBackground: prefs.getBool(_lockOnBgKey) ?? true,
     );
   }
 
@@ -111,5 +117,8 @@ class SettingsRepository {
     await prefs.setDouble(_readerFontSizeKey, value.readerFontSize);
     await prefs.setDouble(_readerLineHeightKey, value.readerLineHeight);
     await prefs.setString(_readerThemeModeKey, value.readerThemeMode);
+    await prefs.setBool(_appLockEnabledKey, value.appLockEnabled);
+    await prefs.setString(_appLockPinHashKey, value.appLockPinHash);
+    await prefs.setBool(_lockOnBgKey, value.lockOnBackground);
   }
 }

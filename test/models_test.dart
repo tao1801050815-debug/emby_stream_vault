@@ -6,6 +6,7 @@ import 'package:emby_stream_vault/core/providers/app_providers.dart';
 import 'package:emby_stream_vault/core/services/cloud_sync_service.dart';
 import 'package:emby_stream_vault/core/services/rating_fetcher_service.dart';
 import 'package:emby_stream_vault/core/services/web_metadata_extractor_service.dart';
+import 'package:emby_stream_vault/features/shell/app_lock_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -262,6 +263,15 @@ void main() {
       expect(chapters[0].title, '第001章-初遇');
       expect(chapters[1].title, '第002章-重逢');
       expect(chapters[0].wordCount, greaterThan(5));
+    });
+  });
+
+  group('AppLockScreen', () {
+    test('hashPin and verifyPin work consistently', () {
+      final hash = AppLockScreen.hashPin('2580');
+      expect(AppLockScreen.verifyPin('2580', hash), isTrue);
+      expect(AppLockScreen.verifyPin('1234', hash), isFalse);
+      expect(AppLockScreen.verifyPin('', hash), isFalse);
     });
   });
 }
