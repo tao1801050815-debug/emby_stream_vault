@@ -65,8 +65,18 @@ class MediaItem {
       return true;
     }
     return tags.any(
-      (t) => t.contains('无码') || t.contains('無碼') || t.toLowerCase().contains('uncensored'),
+      (t) =>
+          t.contains('无码') ||
+          t.contains('無碼') ||
+          t.toLowerCase().contains('uncensored'),
     );
+  }
+
+  /// 标准化后的来源标签（如 MISSAV / HANIME1 / PORNHUB / XHAMSTER）
+  String get sourceTagLabel {
+    final raw = sourceSite.trim();
+    if (raw.isEmpty) return 'CUSTOM';
+    return raw.toUpperCase();
   }
 
   MediaItem copyWith({

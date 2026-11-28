@@ -1,6 +1,7 @@
 import 'package:emby_stream_vault/core/models/download_task.dart';
 import 'package:emby_stream_vault/core/models/media_item.dart';
 import 'package:emby_stream_vault/core/models/site_config.dart';
+import 'package:emby_stream_vault/core/providers/app_providers.dart';
 import 'package:emby_stream_vault/core/services/cloud_sync_service.dart';
 import 'package:emby_stream_vault/core/services/rating_fetcher_service.dart';
 import 'package:emby_stream_vault/core/services/web_metadata_extractor_service.dart';
@@ -152,6 +153,51 @@ void main() {
       expect(mimk173.tags, containsAll(['中出', '无码流出']));
       expect(mimk173.cumCount, 3);
       expect(mimk173.publicRating, closeTo(4.25, 0.001));
+    });
+  });
+
+  group('LibraryFilter', () {
+    test('filters by source site tags and content tags accurately', () {
+      const items = [
+        MediaItem(
+          id: '1',
+          code: 'MIMK-173',
+          title: 'A',
+          sourceSite: 'missav',
+          tags: ['中出', '无码流出'],
+          updatedAtMs: 1,
+        ),
+        MediaItem(
+          id: '2',
+          code: 'HN-100',
+          title: 'B',
+          sourceSite: 'hanime1',
+          tags: ['后宫', '中出'],
+          updatedAtMs: 2,
+        ),
+        MediaItem(
+          id: '3',
+          code: 'SSIS-001',
+          title: 'C',
+          sourceSite: 'missav',
+          tags: ['巨乳'],
+          updatedAtMs: 3,
+        ),
+      ];
+
+      final bySource = const LibraryFilter(selectedSources: {'hanime1'})
+          .applyTagFilters(items);
+      expect(bySource.map((e) => e.id), ['2']);
+
+      final byTag = const LibraryFilter(selectedTags: {'中出'})
+          .applyTagFilters(items);
+      expect(byTag.map((e) => e.id), ['1', '2']);
+
+      final combined = const LibraryFilter(
+        selectedSources: {'missav'},
+        selectedTags: {'中出'},
+      ).applyTagFilters(items);
+      expect(combined.map((e) => e.id), ['1']);
     });
   });
 

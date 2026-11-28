@@ -331,13 +331,38 @@ class _LibraryHomePageState extends ConsumerState<LibraryHomePage> {
                     ],
                   ),
                 ),
-                // 排序与过滤条
+                // 排序与过滤条（最左侧常驻「标签」筛选按钮）
                 SizedBox(
                   height: 38,
                   child: ListView(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     children: [
+                      ActionChip(
+                        avatar: Icon(
+                          Icons.local_offer_rounded,
+                          size: 16,
+                          color: filter.activeTagFilterCount > 0
+                              ? Colors.black
+                              : EmbyTheme.accent,
+                        ),
+                        backgroundColor: filter.activeTagFilterCount > 0
+                            ? EmbyTheme.accent
+                            : null,
+                        label: Text(
+                          filter.activeTagFilterCount > 0
+                              ? '标签 (${filter.activeTagFilterCount})'
+                              : '标签筛选',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: filter.activeTagFilterCount > 0
+                                ? Colors.black
+                                : EmbyTheme.textPrimary,
+                          ),
+                        ),
+                        onPressed: () => _openTagFilterSheet(filter),
+                      ),
+                      const SizedBox(width: 6),
                       ChoiceChip(
                         label: const Text('最近收藏'),
                         selected: filter.sortBy == 'updatedAtMs',
@@ -400,6 +425,84 @@ class _LibraryHomePageState extends ConsumerState<LibraryHomePage> {
                     ],
                   ),
                 ),
+                // 已选来源/内容标签快捷清除条
+                if (filter.activeTagFilterCount > 0)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 6, 14, 0),
+                    child: SizedBox(
+                      height: 32,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: [
+                          ...filter.selectedSources.map(
+                            (src) => Padding(
+                              padding: const EdgeInsets.only(right: 6),
+                              child: InputChip(
+                                visualDensity: VisualDensity.compact,
+                                avatar: const Icon(Icons.public_rounded,
+                                    size: 14, color: EmbyTheme.accentSecondary),
+                                label: Text(
+                                  src.toUpperCase(),
+                                  style: const TextStyle(fontSize: 11.5),
+                                ),
+                                onDeleted: () {
+                                  final next = {...filter.selectedSources}
+                                    ..remove(src);
+                                  setState(() => _currentPage = 1);
+                                  ref
+                                      .read(libraryFilterProvider.notifier)
+                                      .state = filter.copyWith(
+                                    selectedSources: next,
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                          ...filter.selectedTags.map(
+                            (tag) => Padding(
+                              padding: const EdgeInsets.only(right: 6),
+                              child: InputChip(
+                                visualDensity: VisualDensity.compact,
+                                label: Text(
+                                  '#$tag',
+                                  style: const TextStyle(fontSize: 11.5),
+                                ),
+                                onDeleted: () {
+                                  final next = {...filter.selectedTags}
+                                    ..remove(tag);
+                                  setState(() => _currentPage = 1);
+                                  ref
+                                      .read(libraryFilterProvider.notifier)
+                                      .state = filter.copyWith(
+                                    selectedTags: next,
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
+                              minimumSize: Size.zero,
+                            ),
+                            onPressed: () {
+                              setState(() => _currentPage = 1);
+                              ref.read(libraryFilterProvider.notifier).state =
+                                  filter.copyWith(
+                                selectedSources: const {},
+                                selectedTags: const {},
+                              );
+                            },
+                            child: const Text(
+                              '清除全部',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 6),
                 // 主体卡片列表 + 底部分页器（每页严格 8 部）
                 Expanded(
@@ -487,6 +590,223 @@ class _LibraryHomePageState extends ConsumerState<LibraryHomePage> {
     );
   }
 
+  /// 打开「来源标签 + 内容标签」筛选面板
+  Future<void> _openTagFilterSheet(LibraryFilter currentFilter) async {
+    final facets = await ref.read(libraryTagFacetsProvider.future);
+    if (!mounted) return;
+
+    final pickedSources = {...currentFilter.selectedSources};
+    final pickedTags = {...currentFilter.selectedTags};
+    var searchKw = '';
+
+    final applied = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: EmbyTheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final kw = searchKw.trim().toLowerCase();
+          final visibleSources = kw.isEmpty
+              ? facets.sourceTags
+              : facets.sourceTags
+                  .where((e) => e.key.toLowerCase().contains(kw))
+                  .toList();
+          final visibleTags = kw.isEmpty
+              ? facets.contentTags
+              : facets.contentTags
+                  .where((e) => e.key.toLowerCase().contains(kw))
+                  .toList();
+
+          return DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: 0.72,
+            minChildSize: 0.45,
+            maxChildSize: 0.92,
+            builder: (_, scrollCtrl) => Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 12, 6),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.local_offer_rounded,
+                          color: EmbyTheme.accent, size: 20),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          '按来源与标签筛选',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          setSheetState(() {
+                            pickedSources.clear();
+                            pickedTags.clear();
+                          });
+                        },
+                        child: const Text('清空已选'),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: SizedBox(
+                    height: 38,
+                    child: TextField(
+                      decoration: const InputDecoration(
+                        hintText: '搜索标签或来源（如 中出、后宫、missav、hanime）...',
+                        prefixIcon: Icon(Icons.search_rounded, size: 18),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                      ),
+                      onChanged: (v) => setSheetState(() => searchKw = v),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: ListView(
+                    controller: scrollCtrl,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    children: [
+                      const Text(
+                        '来源网站标签（可多选，命中任一即显示）',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: EmbyTheme.accentSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (visibleSources.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            '暂无匹配的来源标签',
+                            style: TextStyle(
+                                fontSize: 12, color: EmbyTheme.textSecondary),
+                          ),
+                        )
+                      else
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: visibleSources.map((entry) {
+                            final selected = pickedSources.contains(entry.key);
+                            return FilterChip(
+                              selected: selected,
+                              selectedColor: EmbyTheme.accentSecondary
+                                  .withValues(alpha: 0.28),
+                              label: Text(
+                                '${entry.key.toUpperCase()} (${entry.value})',
+                              ),
+                              onSelected: (v) {
+                                setSheetState(() {
+                                  if (v) {
+                                    pickedSources.add(entry.key);
+                                  } else {
+                                    pickedSources.remove(entry.key);
+                                  }
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      const SizedBox(height: 18),
+                      const Text(
+                        '影片内容标签（可多选叠加，如 中出 + 无码）',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFFFF7AA8),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (visibleTags.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 16),
+                          child: Text(
+                            '暂无匹配的影片标签（从 MissAV 收藏或详情页编辑即可自动沉淀标签）',
+                            style: TextStyle(
+                                fontSize: 12, color: EmbyTheme.textSecondary),
+                          ),
+                        )
+                      else
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: visibleTags.map((entry) {
+                            final selected = pickedTags.contains(entry.key);
+                            return FilterChip(
+                              selected: selected,
+                              selectedColor: const Color(0x44FF4D8D),
+                              label: Text('${entry.key} (${entry.value})'),
+                              onSelected: (v) {
+                                setSheetState(() {
+                                  if (v) {
+                                    pickedTags.add(entry.key);
+                                  } else {
+                                    pickedTags.remove(entry.key);
+                                  }
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                    child: Row(
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('取消'),
+                        ),
+                        const Spacer(),
+                        FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: EmbyTheme.accent,
+                            foregroundColor: Colors.black,
+                          ),
+                          onPressed: () => Navigator.pop(ctx, true),
+                          icon: const Icon(Icons.check_rounded, size: 18),
+                          label: Text(
+                            (pickedSources.length + pickedTags.length) > 0
+                                ? '应用筛选 (${pickedSources.length + pickedTags.length})'
+                                : '显示全部影片',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+
+    if (applied == true && mounted) {
+      setState(() => _currentPage = 1);
+      ref.read(libraryFilterProvider.notifier).state = currentFilter.copyWith(
+        selectedSources: pickedSources,
+        selectedTags: pickedTags,
+      );
+    }
+  }
+
   Widget _buildCardItem(MediaItem item, bool isSingleColumn) {
     final isSelected = _selectedIds.contains(item.id);
     void handleTap() {
@@ -509,6 +829,20 @@ class _LibraryHomePageState extends ConsumerState<LibraryHomePage> {
         onTap: handleTap,
         onLongPress: () => _showCardActions(item),
         onMoreTap: () => _showCardActions(item),
+        onTagTap: (tag) {
+          final current = ref.read(libraryFilterProvider);
+          setState(() => _currentPage = 1);
+          ref.read(libraryFilterProvider.notifier).state = current.copyWith(
+            selectedTags: {...current.selectedTags, tag},
+          );
+        },
+        onSourceTap: (src) {
+          final current = ref.read(libraryFilterProvider);
+          setState(() => _currentPage = 1);
+          ref.read(libraryFilterProvider.notifier).state = current.copyWith(
+            selectedSources: {src.toLowerCase()},
+          );
+        },
         onCumCountChanged: (next) => ref
             .read(mediaLibraryProvider.notifier)
             .updateCumCount(item.id, next),
@@ -892,6 +1226,8 @@ class _PornhubWideCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final VoidCallback onMoreTap;
+  final ValueChanged<String> onTagTap;
+  final ValueChanged<String> onSourceTap;
   final ValueChanged<int> onCumCountChanged;
 
   const _PornhubWideCard({
@@ -901,6 +1237,8 @@ class _PornhubWideCard extends StatelessWidget {
     required this.onTap,
     required this.onLongPress,
     required this.onMoreTap,
+    required this.onTagTap,
+    required this.onSourceTap,
     required this.onCumCountChanged,
   });
 
@@ -975,35 +1313,62 @@ class _PornhubWideCard extends StatelessWidget {
                       color: EmbyTheme.textSecondary,
                     ),
                   ),
-                  if (item.tags.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 5,
-                      children: item.tags.take(6).map((tag) {
-                        final isUnc = tag.contains('无码') || tag.contains('無碼');
-                        return Container(
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 5,
+                    children: [
+                      GestureDetector(
+                        onTap: () => onSourceTap(
+                          item.sourceSite.isNotEmpty
+                              ? item.sourceSite
+                              : 'custom',
+                        ),
+                        child: Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 7, vertical: 2),
                           decoration: BoxDecoration(
-                            color: isUnc
-                                ? const Color(0x33FF4D8D)
-                                : Colors.white.withValues(alpha: 0.08),
+                            color: EmbyTheme.accentSecondary
+                                .withValues(alpha: 0.22),
                             borderRadius: BorderRadius.circular(5),
                           ),
                           child: Text(
-                            tag,
-                            style: TextStyle(
+                            item.sourceTagLabel,
+                            style: const TextStyle(
                               fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: EmbyTheme.accentSecondary,
+                            ),
+                          ),
+                        ),
+                      ),
+                      ...item.tags.take(6).map((tag) {
+                        final isUnc = tag.contains('无码') || tag.contains('無碼');
+                        return GestureDetector(
+                          onTap: () => onTagTap(tag),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
                               color: isUnc
-                                  ? const Color(0xFFFF7AA8)
-                                  : EmbyTheme.textPrimary,
+                                  ? const Color(0x33FF4D8D)
+                                  : Colors.white.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                            child: Text(
+                              tag,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isUnc
+                                    ? const Color(0xFFFF7AA8)
+                                    : EmbyTheme.textPrimary,
+                              ),
                             ),
                           ),
                         );
-                      }).toList(),
-                    ),
-                  ],
+                      }),
+                    ],
+                  ),
                 ],
               ),
             ),

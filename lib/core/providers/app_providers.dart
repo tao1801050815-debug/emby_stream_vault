@@ -92,31 +92,111 @@ class LibraryFilter {
   final String searchQuery;
   final double minRating;
   final String sortBy;
+  final Set<String> selectedSources; // 选中的来源标签（小写 key，如 missav / hanime1）
+  final Set<String> selectedTags; // 选中的影片标签（如 中出 / 后宫 / 无码流出）
 
   const LibraryFilter({
     this.onlyFavorites = false,
     this.searchQuery = '',
     this.minRating = 0.0,
     this.sortBy = 'updatedAtMs',
+    this.selectedSources = const {},
+    this.selectedTags = const {},
   });
+
+  int get activeTagFilterCount => selectedSources.length + selectedTags.length;
+
+  /// 纯函数：按来源标签（OR）与影片内容标签（AND）精确过滤列表
+  List<MediaItem> applyTagFilters(List<MediaItem> items) {
+    if (selectedSources.isEmpty && selectedTags.isEmpty) return items;
+    final lowerSources = selectedSources.map((e) => e.toLowerCase()).toSet();
+    final lowerTags = selectedTags.map((e) => e.toLowerCase()).toSet();
+
+    return items.where((item) {
+      if (lowerSources.isNotEmpty) {
+        final site = item.sourceSite.trim().toLowerCase();
+        final normalizedSite = site.isEmpty ? 'custom' : site;
+        if (!lowerSources.contains(normalizedSite)) {
+          return false;
+        }
+      }
+      if (lowerTags.isNotEmpty) {
+        final itemLowerTags =
+            item.tags.map((t) => t.trim().toLowerCase()).toSet();
+        for (final reqTag in lowerTags) {
+          if (!itemLowerTags.contains(reqTag)) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }).toList();
+  }
 
   LibraryFilter copyWith({
     bool? onlyFavorites,
     String? searchQuery,
     double? minRating,
     String? sortBy,
+    Set<String>? selectedSources,
+    Set<String>? selectedTags,
   }) {
     return LibraryFilter(
       onlyFavorites: onlyFavorites ?? this.onlyFavorites,
       searchQuery: searchQuery ?? this.searchQuery,
       minRating: minRating ?? this.minRating,
       sortBy: sortBy ?? this.sortBy,
+      selectedSources: selectedSources ?? this.selectedSources,
+      selectedTags: selectedTags ?? this.selectedTags,
     );
   }
 }
 
 final libraryFilterProvider =
     StateProvider<LibraryFilter>((ref) => const LibraryFilter());
+
+/// 全库标签与来源站点聚合统计（不受当前筛选隐藏，方便随时切换）
+class LibraryTagFacets {
+  final List<MapEntry<String, int>> sourceTags; // (sourceKey, count)
+  final List<MapEntry<String, int>> contentTags; // (tagName, count)
+
+  const LibraryTagFacets({
+    this.sourceTags = const [],
+    this.contentTags = const [],
+  });
+}
+
+final libraryTagFacetsProvider = FutureProvider<LibraryTagFacets>((ref) async {
+  // 监听影库变化以便增删影片后自动重新统计
+  ref.watch(mediaLibraryProvider);
+  final allItems = await DatabaseHelper.instance.getAllMediaItems();
+  final sourceCounts = <String, int>{};
+  final tagCounts = <String, int>{};
+
+  for (final item in allItems) {
+    final src = item.sourceSite.trim().toLowerCase();
+    final key = src.isEmpty ? 'custom' : src;
+    sourceCounts[key] = (sourceCounts[key] ?? 0) + 1;
+
+    final seenTags = <String>{};
+    for (final rawTag in item.tags) {
+      final t = rawTag.trim();
+      if (t.isNotEmpty && seenTags.add(t.toLowerCase())) {
+        tagCounts[t] = (tagCounts[t] ?? 0) + 1;
+      }
+    }
+  }
+
+  final sortedSources = sourceCounts.entries.toList()
+    ..sort((a, b) => b.value.compareTo(a.value));
+  final sortedTags = tagCounts.entries.toList()
+    ..sort((a, b) => b.value.compareTo(a.value));
+
+  return LibraryTagFacets(
+    sourceTags: sortedSources,
+    contentTags: sortedTags,
+  );
+});
 
 /// 本地媒体库状态
 final mediaLibraryProvider =
@@ -149,12 +229,13 @@ class MediaLibraryNotifier extends StateNotifier<AsyncValue<List<MediaItem>>> {
 
   Future<void> refresh() async {
     try {
-      final items = await DatabaseHelper.instance.getAllMediaItems(
+      final rawItems = await DatabaseHelper.instance.getAllMediaItems(
         onlyFavorites: _filter.onlyFavorites,
         searchQuery: _filter.searchQuery,
         minRating: _filter.minRating,
         sortBy: _filter.sortBy,
       );
+      final items = _filter.applyTagFilters(rawItems);
       state = AsyncValue.data(items);
 
       // 首次加载时自动为缺少网评的已收藏影片在后台静默补齐评分
