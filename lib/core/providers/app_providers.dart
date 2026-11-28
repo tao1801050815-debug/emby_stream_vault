@@ -21,8 +21,12 @@ final siteProfilesProvider =
 class SiteProfilesNotifier extends StateNotifier<List<SiteProfile>> {
   final SettingsRepository _repo;
 
-  SiteProfilesNotifier(this._repo) : super(SiteProfile.defaults()) {
-    _load();
+  SiteProfilesNotifier(
+    this._repo, {
+    List<SiteProfile>? initialSites,
+    bool autoLoad = true,
+  }) : super(initialSites ?? SiteProfile.defaults()) {
+    if (autoLoad) _load();
   }
 
   Future<void> _load() async {
@@ -72,8 +76,12 @@ final appPreferencesProvider =
 class AppPreferencesNotifier extends StateNotifier<AppPreferences> {
   final SettingsRepository _repo;
 
-  AppPreferencesNotifier(this._repo) : super(const AppPreferences()) {
-    _load();
+  AppPreferencesNotifier(
+    this._repo, {
+    AppPreferences initial = const AppPreferences(),
+    bool autoLoad = true,
+  }) : super(initial) {
+    if (autoLoad) _load();
   }
 
   Future<void> _load() async {
@@ -254,9 +262,11 @@ class MediaLibraryNotifier extends StateNotifier<AsyncValue<List<MediaItem>>> {
   MediaLibraryNotifier(
     this._filter, {
     required String javdbBaseUrl,
+    AsyncValue<List<MediaItem>>? initialState,
+    bool autoLoad = true,
   })  : _javdbBaseUrl = javdbBaseUrl,
-        super(const AsyncValue.loading()) {
-    refresh();
+        super(initialState ?? const AsyncValue.loading()) {
+    if (autoLoad) refresh();
   }
 
   Future<void> refresh() async {
@@ -490,8 +500,12 @@ final bookmarksProvider =
 class BookmarksNotifier extends StateNotifier<List<BookmarkItem>> {
   final String _folder;
 
-  BookmarksNotifier(this._folder) : super(const []) {
-    refresh();
+  BookmarksNotifier(
+    this._folder, {
+    List<BookmarkItem> initial = const [],
+    bool autoLoad = true,
+  }) : super(initial) {
+    if (autoLoad) refresh();
   }
 
   Future<void> refresh() async {

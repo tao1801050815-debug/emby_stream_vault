@@ -18,7 +18,16 @@ jobs:
           channel: 'stable'
       - run: flutter pub get
       - run: flutter analyze --no-fatal-infos
-      - run: flutter test
+      - run: flutter test test/models_test.dart
+      - name: Install CJK font and render real UI preview screenshots
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-noto-cjk
+          flutter test --update-goldens test/ui_preview_test.dart
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EmbyStreamVault-UI-Previews
+          path: test/goldens/*.png
 
   build_android:
     needs: analyze_and_test
@@ -110,6 +119,11 @@ jobs:
         with:
           name: EmbyStreamVault-iOS-Unsigned-IPA
           path: release_files
+      - name: Download UI Preview Screenshots
+        uses: actions/download-artifact@v4
+        with:
+          name: EmbyStreamVault-UI-Previews
+          path: release_files
       - name: Rename Android APK
         run: mv release_files/app-release.apk release_files/EmbyStreamVault-Android.apk
       - name: Generate AltStore / GBox / ESign Software Source (apps.json)
@@ -189,8 +203,21 @@ jobs:
 
             全能签添加软件源地址：
             `https://github.com/${{ github.repository }}/releases/download/latest/apps.json`
+
+            ### 本次版本真实界面预览（安装前先看效果）
+            | MissAV 双列并排（8部分页） | Pornhub 单列大横卡 |
+            | :---: | :---: |
+            | ![MissAV双列](https://github.com/${{ github.repository }}/releases/download/latest/preview_1_home_missav_grid.png) | ![Pornhub单列](https://github.com/${{ github.repository }}/releases/download/latest/preview_2_home_pornhub_wide.png) |
+
+            | 来源 / 女优 / 标签筛选面板 | 详情页（可点女优与标签汇总） |
+            | :---: | :---: |
+            | ![标签筛选](https://github.com/${{ github.repository }}/releases/download/latest/preview_3_tag_filter_sheet.png) | ![详情页](https://github.com/${{ github.repository }}/releases/download/latest/preview_4_media_detail.png) |
           files: |
             release_files/EmbyStreamVault-unsigned.ipa
             release_files/EmbyStreamVault-Android.apk
             release_files/apps.json
+            release_files/preview_1_home_missav_grid.png
+            release_files/preview_2_home_pornhub_wide.png
+            release_files/preview_3_tag_filter_sheet.png
+            release_files/preview_4_media_detail.png
           make_latest: true
