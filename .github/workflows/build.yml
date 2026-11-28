@@ -51,12 +51,12 @@ jobs:
         run: |
           find ~/.pub-cache -path "*/flutter_inappwebview_android*/android/build.gradle" -exec sed -i 's/proguard-android\.txt/proguard-android-optimize.txt/g' {} +
           find ~/.pub-cache -path "*/file_picker*/android/build.gradle" -exec sed -i -E 's/compileSdk(Version)?[[:space:]]*=?[[:space:]]*34/compileSdk 36/g' {} +
-      - name: Build Android APK with version 1.1.00
+      - name: Build Android APK with version 1.1.02
         run: |
-          APP_VERSION="1.1.00"
+          APP_VERSION="1.1.02"
           APP_BUILD="${{ github.run_number }}"
           flutter build apk --release \
-            --build-name="1.1.0" \
+            --build-name="1.1.2" \
             --build-number="$APP_BUILD" \
             --dart-define="APP_VERSION=$APP_VERSION" \
             --dart-define="APP_BUILD=$APP_BUILD"
@@ -83,12 +83,12 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes array" ios/Runner/Info.plist || true
           /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes:0 string audio" ios/Runner/Info.plist || true
       - run: flutter pub get
-      - name: Build iOS (unsigned) with version 1.1.00
+      - name: Build iOS (unsigned) with version 1.1.02
         run: |
-          APP_VERSION="1.1.00"
+          APP_VERSION="1.1.02"
           APP_BUILD="${{ github.run_number }}"
           flutter build ios --release --no-codesign \
-            --build-name="1.1.0" \
+            --build-name="1.1.2" \
             --build-number="$APP_BUILD" \
             --dart-define="APP_VERSION=$APP_VERSION" \
             --dart-define="APP_BUILD=$APP_BUILD"
@@ -136,7 +136,7 @@ jobs:
 
           repo = os.environ["REPO"]
           run_num = int(os.environ["RUN_NUM"])
-          version = "1.1.00"
+          version = "1.1.02"
           now_iso = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
           ipa_path = "release_files/EmbyStreamVault-unsigned.ipa"
           ipa_size = os.path.getsize(ipa_path) if os.path.exists(ipa_path) else 0
@@ -194,9 +194,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: EmbyStreamVault v1.1.00 (build ${{ github.run_number }})
+          name: EmbyStreamVault v1.1.02 (build ${{ github.run_number }})
           body: |
-            自动构建的最新双端安装包（`v1.1.00`，build `${{ github.run_number }}`）：
+            自动构建的最新双端安装包（`v1.1.02`，build `${{ github.run_number }}`）：
             - `EmbyStreamVault-unsigned.ipa`：iOS / iPadOS 未签名安装包
             - `EmbyStreamVault-Android.apk`：Android 安装包
             - `apps.json`：全能签 / 轻松签 / AltStore 软件源订阅文件

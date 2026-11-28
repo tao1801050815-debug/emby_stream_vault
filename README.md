@@ -1,6 +1,6 @@
-# EmbyStreamVault (`v1.1.00`)
+# EmbyStreamVault (`v1.1.02`)
 
-跨平台（iOS / iPadOS / Android）私人 Emby 风格媒体库、片源嗅探浏览器、增强原生播放器与纯手机端 AI 实时中文字幕应用（基于 Flutter 构建）。
+跨平台（iOS / iPadOS / Android）私人 Emby 风格媒体库、私人小说书架、片源嗅探浏览器、增强原生播放器与纯手机端 AI 实时中文字幕应用（基于 Flutter 构建）。
 
 ---
 
@@ -48,7 +48,18 @@
   2. **WebDAV 云同步**：原生支持坚果云（国内直连免费）、Alist 与自建 NAS。
   3. **离线剪贴板 JSON**：无需任何账号，一键导出/导入合并。
 
-### 6. m3u8 离线缓存引擎（`lib/core/services/m3u8_downloader_service.dart`）
+### 6. 私人小说书架与沉浸式阅读器（`lib/features/novels/`）
+- **三通道追更同步**：
+  1. **局域网 Wi-Fi 直连**：配合电脑端 `启动小说局域网同步服务.bat`，自动按章排序扫描写作目录并秒速拉取到手机；
+  2. **坚果云 / WebDAV 云端同步**：配合 `一键同步小说到坚果云.bat`，出门在外随时追更；
+  3. **本地 TXT / MD 文件导入**：自动识别 `第XXX章` / `# 标题` 拆分成完整章节目录。
+- **沉浸式护眼阅读**：支持深黑夜读 / 羊皮纸 / 豆沙绿 3 套配色、字号与行距调节、目录跳章，同步更新新章节时**自动保留原阅读进度**。
+
+### 7. 隐私安全锁（`lib/features/shell/app_lock_screen.dart`）
+- **4~6 位数字密码锁**（加盐哈希存储，不存明文），锁屏界面极简无敏感字样；
+- **切后台自动上锁 + 多任务防窥遮罩**：上滑切后台卡片或锁屏时自动隐藏真实画面，返回需重新解锁。
+
+### 8. m3u8 离线缓存引擎（`lib/core/services/m3u8_downloader_service.dart`）
 - 自动解析 Master Playlist（优先最高码率）并并发下载分片至本地，生成本地 `local.m3u8` 离线播放。
 
 ---
@@ -60,7 +71,7 @@
 ### 自动版本发布、真实 UI 预览图与 Release
 每次向 `main` 分支推送代码后，Actions 会自动执行：
 1. `analyze_and_test`：运行 `flutter analyze --no-fatal-infos`、`flutter test test/models_test.dart`，并自动渲染 **4 张真实 iPhone 比例高清 UI 预览图**（MissAV 双列主页、Pornhub 单列大卡、三合一标签筛选面板、详情页）；
-2. `build_android` & `build_ios_unsigned`：打包双端安装包（当前版本 `v1.1.00`，`buildNumber` 自动递增）；
+2. `build_android` & `build_ios_unsigned`：打包双端安装包（当前版本 `v1.1.02`，`buildNumber` 自动递增）；
 3. `publish_release`：自动汇总最近 5 条更新说明生成标准软件源 `apps.json`，将双端安装包与 **4 张真实界面截图** 一并发布到 GitHub Release `latest`（安装前可直接看图验收）。
 
 ### 全能签 / 轻松签 / AltStore 一键更新配置
@@ -84,12 +95,13 @@ lib/
 │   ├── models/          # MediaItem / SiteProfile / AppPreferences / BookmarkItem / DownloadTask
 │   ├── providers/       # Riverpod 全局状态管理
 │   ├── services/        # 评分抓取 / AI 实时字幕 / 网页元数据提取 / 云同步 / 更新检测 / m3u8 下载
-│   ├── storage/         # SQLite (v4 无损迁移) & SharedPreferences 持久化
+│   ├── storage/         # SQLite (v5 无损迁移) & SharedPreferences 持久化
 │   ├── theme/           # Emby 深色主题配色
 │   └── widgets/         # 自定义矢量计数微缩图标与交互徽章
 └── features/
-    ├── shell/           # 底部导航壳与启动自动更新检测
+    ├── shell/           # 底部导航壳、隐私密码锁与启动自动更新检测
     ├── library/         # Pornhub/MissAV 双布局分页主页、毛玻璃详情页 & 女优/标签作品汇总页
+    ├── novels/          # 私人小说书架与沉浸式护眼阅读器
     ├── browser/         # 内置嗅探浏览器、可拖动悬浮条与选片弹窗
     ├── player/          # libmpv 增强播放器与双语实时字幕浮层
     ├── downloads/       # 离线缓存任务管理页

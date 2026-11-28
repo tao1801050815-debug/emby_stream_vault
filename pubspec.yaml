@@ -1,7 +1,7 @@
 name: emby_stream_vault
 description: Emby-style cross-platform media library, WebView sniffer (MissAV/JavDB login & CF bypass), enhanced player, and offline m3u8 downloader.
 publish_to: 'none'
-version: 1.1.0+1
+version: 1.1.2+1
 
 environment:
   sdk: '>=3.4.0 <4.0.0'

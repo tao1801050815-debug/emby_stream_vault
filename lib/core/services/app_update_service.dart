@@ -6,7 +6,7 @@ import '../theme/emby_theme.dart';
 
 /// 编译期注入的版本号与构建号（由 GitHub Actions 自动递增）
 const String kAppVersion =
-    String.fromEnvironment('APP_VERSION', defaultValue: '1.1.00');
+    String.fromEnvironment('APP_VERSION', defaultValue: '1.1.02');
 const int kAppBuildNumber =
     int.fromEnvironment('APP_BUILD', defaultValue: 0);
 
