@@ -1,4 +1,4 @@
-# EmbyStreamVault
+# EmbyStreamVault (`v1.1.00`)
 
 跨平台（iOS / iPadOS / Android）私人 Emby 风格媒体库、片源嗅探浏览器、增强原生播放器与纯手机端 AI 实时中文字幕应用（基于 Flutter 构建）。
 
@@ -15,6 +15,9 @@
   - 左上角：番号徽章 + **无码版本**高亮角标；
   - 右上角：**网上评分（JavDB 自动抓取）** + **个人 1~5 星评分**；
   - 右下角：纯代码绘制专属微缩计数图标 + **自定义计数**（点击即可快捷 `+1` / `-1` / 归零 / 手动输入任意次数）。
+- **三合一标签筛选与专题汇总**：
+  - 首页常驻「标签筛选」弹窗，自动汇总全库的**来源网站标签**（`MISSAV`、`HANIME1`、`PORNHUB` 等）、**女优/演员标签**与**影片内容标签**（如 `中出`、`后宫`、`无码流出`），支持弹窗内搜标签及多条件组合筛选。
+  - 在影片详情页点击任意**女优名字、标签或来源徽章**，可直接进入该女优/标签的专属作品汇总页（`tag_collection_page.dart`）无限连跳探索。
 - **多维排序与管理**：支持按最近收藏、次数最多、个人高分、网上高分、番号排序，支持长按快捷操作、批量多选删除与元数据纠错锁定。
 - **自定义网址添加收藏**：输入或粘贴任意视频网址，一键自动提取影片名称、高清封面（实时预览）、番号、来源与页面标签，所有字段均可自由修改。
 - **免登录网页书签夹**：对无需登录的站点一键收藏网页直达。
@@ -54,11 +57,11 @@
 
 本项目已配置完整的 GitHub Actions 云端构建与发布工作流（`.github/workflows/build.yml`），无需 Mac 即可同时产出未签名 iOS `.ipa`、Android `.apk` 和标准软件源 `apps.json`。
 
-### 自动版本递增与 Release 发布
+### 自动版本发布、真实 UI 预览图与 Release
 每次向 `main` 分支推送代码后，Actions 会自动执行：
-1. `analyze_and_test`：运行 `flutter analyze --no-fatal-infos` 与 `flutter test` 单元测试；
-2. `build_android` & `build_ios_unsigned`：自动按运行号递增版本号（`v1.0.<run_number>`）打包双端安装包；
-3. `publish_release`：自动汇总最近 5 条更新说明生成标准软件源 `apps.json`，连同安装包发布到 GitHub Release `latest`。
+1. `analyze_and_test`：运行 `flutter analyze --no-fatal-infos`、`flutter test test/models_test.dart`，并自动渲染 **4 张真实 iPhone 比例高清 UI 预览图**（MissAV 双列主页、Pornhub 单列大卡、三合一标签筛选面板、详情页）；
+2. `build_android` & `build_ios_unsigned`：打包双端安装包（当前版本 `v1.1.00`，`buildNumber` 自动递增）；
+3. `publish_release`：自动汇总最近 5 条更新说明生成标准软件源 `apps.json`，将双端安装包与 **4 张真实界面截图** 一并发布到 GitHub Release `latest`（安装前可直接看图验收）。
 
 ### 全能签 / 轻松签 / AltStore 一键更新配置
 1. 确保仓库为 **Public**（仅包含 App 源码，你的登录状态、影库收藏与 API Key 均只存在手机本地）。
@@ -86,7 +89,7 @@ lib/
 │   └── widgets/         # 自定义矢量计数微缩图标与交互徽章
 └── features/
     ├── shell/           # 底部导航壳与启动自动更新检测
-    ├── library/         # Pornhub/MissAV 双布局分页主页 & 毛玻璃详情页
+    ├── library/         # Pornhub/MissAV 双布局分页主页、毛玻璃详情页 & 女优/标签作品汇总页
     ├── browser/         # 内置嗅探浏览器、可拖动悬浮条与选片弹窗
     ├── player/          # libmpv 增强播放器与双语实时字幕浮层
     ├── downloads/       # 离线缓存任务管理页
