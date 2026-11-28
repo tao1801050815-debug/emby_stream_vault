@@ -1,5 +1,6 @@
 import 'package:emby_stream_vault/core/models/download_task.dart';
 import 'package:emby_stream_vault/core/models/media_item.dart';
+import 'package:emby_stream_vault/core/models/novel_book.dart';
 import 'package:emby_stream_vault/core/models/site_config.dart';
 import 'package:emby_stream_vault/core/providers/app_providers.dart';
 import 'package:emby_stream_vault/core/services/cloud_sync_service.dart';
@@ -243,6 +244,24 @@ void main() {
       final restored = DownloadTask.fromMap(task.toMap());
       expect(restored.status, DownloadStatus.downloading);
       expect(restored.progress, closeTo(0.4, 0.001));
+    });
+  });
+
+  group('NovelBook', () {
+    test('parseTextIntoChapters splits Chinese chapter headings accurately',
+        () {
+      const sample = '''
+第001章-初遇
+这是第一章的内容，包含很多段落文字。
+
+第002章-重逢
+这是第二章的内容。
+''';
+      final chapters = NovelBook.parseTextIntoChapters(sample);
+      expect(chapters.length, 2);
+      expect(chapters[0].title, '第001章-初遇');
+      expect(chapters[1].title, '第002章-重逢');
+      expect(chapters[0].wordCount, greaterThan(5));
     });
   });
 }

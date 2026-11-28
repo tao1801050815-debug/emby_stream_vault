@@ -4,6 +4,7 @@ import 'package:sqflite/sqflite.dart';
 import '../models/bookmark.dart';
 import '../models/download_task.dart';
 import '../models/media_item.dart';
+import '../models/novel_book.dart';
 
 /// 本地 SQLite 数据库管理（私人媒体库 + 离线缓存任务）
 class DatabaseHelper {
@@ -23,7 +24,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'emby_stream_vault.db');
     return openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE media_items (
@@ -72,6 +73,7 @@ class DatabaseHelper {
         ''');
 
         await _createBookmarksTable(db);
+        await _createNovelBooksTable(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -90,8 +92,27 @@ class DatabaseHelper {
             'ALTER TABLE media_items ADD COLUMN cumCount INTEGER DEFAULT 0',
           );
         }
+        if (oldVersion < 5) {
+          await _createNovelBooksTable(db);
+        }
       },
     );
+  }
+
+  Future<void> _createNovelBooksTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS novel_books (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        author TEXT,
+        summary TEXT,
+        source TEXT,
+        chaptersJson TEXT NOT NULL,
+        lastChapterIndex INTEGER DEFAULT 0,
+        lastScrollOffset REAL DEFAULT 0.0,
+        updatedAtMs INTEGER NOT NULL
+      )
+    ''');
   }
 
   Future<void> _createBookmarksTable(Database db) async {
@@ -369,5 +390,60 @@ class DatabaseHelper {
   Future<void> deleteBookmark(String id) async {
     final db = await database;
     await db.delete('bookmarks', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ---- NovelBook CRUD ----
+
+  Future<void> upsertNovelBook(NovelBook book) async {
+    final db = await database;
+    final existing = await getNovelBookById(book.id);
+    final merged = existing == null
+        ? book
+        : book.copyWith(
+            lastChapterIndex: existing.lastChapterIndex
+                .clamp(0, (book.chapters.length - 1).clamp(0, 999999)),
+            lastScrollOffset: existing.lastScrollOffset,
+          );
+    await db.insert(
+      'novel_books',
+      merged.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<NovelBook?> getNovelBookById(String id) async {
+    final db = await database;
+    final rows =
+        await db.query('novel_books', where: 'id = ?', whereArgs: [id]);
+    if (rows.isEmpty) return null;
+    return NovelBook.fromMap(rows.first);
+  }
+
+  Future<List<NovelBook>> getAllNovelBooks() async {
+    final db = await database;
+    final rows = await db.query('novel_books', orderBy: 'updatedAtMs DESC');
+    return rows.map(NovelBook.fromMap).toList();
+  }
+
+  Future<void> updateNovelProgress({
+    required String id,
+    required int chapterIndex,
+    required double scrollOffset,
+  }) async {
+    final db = await database;
+    await db.update(
+      'novel_books',
+      {
+        'lastChapterIndex': chapterIndex,
+        'lastScrollOffset': scrollOffset,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> deleteNovelBook(String id) async {
+    final db = await database;
+    await db.delete('novel_books', where: 'id = ?', whereArgs: [id]);
   }
 }

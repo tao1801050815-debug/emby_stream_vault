@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/bookmark.dart';
 import '../models/download_task.dart';
 import '../models/media_item.dart';
+import '../models/novel_book.dart';
 import '../models/site_config.dart';
 import '../services/live_ai_subtitle_service.dart';
 import '../services/m3u8_downloader_service.dart';
@@ -519,6 +520,43 @@ class BookmarksNotifier extends StateNotifier<List<BookmarkItem>> {
 
   Future<void> remove(String id) async {
     await DatabaseHelper.instance.deleteBookmark(id);
+    await refresh();
+  }
+}
+
+/// 私人小说书架状态
+final novelBooksProvider =
+    StateNotifierProvider<NovelBooksNotifier, List<NovelBook>>((ref) {
+  return NovelBooksNotifier();
+});
+
+class NovelBooksNotifier extends StateNotifier<List<NovelBook>> {
+  NovelBooksNotifier({
+    List<NovelBook> initial = const [],
+    bool autoLoad = true,
+  }) : super(initial) {
+    if (autoLoad) refresh();
+  }
+
+  Future<void> refresh() async {
+    state = await DatabaseHelper.instance.getAllNovelBooks();
+  }
+
+  Future<void> updateProgress(
+    String id,
+    int chapterIndex,
+    double scrollOffset,
+  ) async {
+    await DatabaseHelper.instance.updateNovelProgress(
+      id: id,
+      chapterIndex: chapterIndex,
+      scrollOffset: scrollOffset,
+    );
+    await refresh();
+  }
+
+  Future<void> remove(String id) async {
+    await DatabaseHelper.instance.deleteNovelBook(id);
     await refresh();
   }
 }

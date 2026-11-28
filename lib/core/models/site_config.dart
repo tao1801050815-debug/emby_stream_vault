@@ -163,6 +163,11 @@ class AppPreferences {
   final String syncWebDavUser;
   final String syncWebDavPass;
   final int lastSyncAtMs;
+  // 私人小说书架与阅读器偏好
+  final String novelLanServerUrl;
+  final double readerFontSize;
+  final double readerLineHeight;
+  final String readerThemeMode; // 'dark' | 'sepia' | 'green'
 
   const AppPreferences({
     this.seekSeconds = 10,
@@ -188,6 +193,10 @@ class AppPreferences {
     this.syncWebDavUser = '',
     this.syncWebDavPass = '',
     this.lastSyncAtMs = 0,
+    this.novelLanServerUrl = 'http://192.168.1.2:8765',
+    this.readerFontSize = 17.5,
+    this.readerLineHeight = 1.75,
+    this.readerThemeMode = 'dark',
   });
 
   AppPreferences copyWith({
@@ -212,6 +221,10 @@ class AppPreferences {
     String? syncWebDavUser,
     String? syncWebDavPass,
     int? lastSyncAtMs,
+    String? novelLanServerUrl,
+    double? readerFontSize,
+    double? readerLineHeight,
+    String? readerThemeMode,
   }) {
     return AppPreferences(
       seekSeconds: seekSeconds ?? this.seekSeconds,
@@ -235,6 +248,10 @@ class AppPreferences {
       syncWebDavUser: syncWebDavUser ?? this.syncWebDavUser,
       syncWebDavPass: syncWebDavPass ?? this.syncWebDavPass,
       lastSyncAtMs: lastSyncAtMs ?? this.lastSyncAtMs,
+      novelLanServerUrl: novelLanServerUrl ?? this.novelLanServerUrl,
+      readerFontSize: readerFontSize ?? this.readerFontSize,
+      readerLineHeight: readerLineHeight ?? this.readerLineHeight,
+      readerThemeMode: readerThemeMode ?? this.readerThemeMode,
     );
   }
 }

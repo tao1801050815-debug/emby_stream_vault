@@ -25,6 +25,10 @@ class SettingsRepository {
   static const _syncWebDavUserKey = 'pref_sync_webdav_user';
   static const _syncWebDavPassKey = 'pref_sync_webdav_pass';
   static const _lastSyncAtMsKey = 'pref_last_sync_at_ms';
+  static const _novelLanUrlKey = 'pref_novel_lan_url';
+  static const _readerFontSizeKey = 'pref_reader_font_size';
+  static const _readerLineHeightKey = 'pref_reader_line_height';
+  static const _readerThemeModeKey = 'pref_reader_theme_mode';
 
   Future<List<SiteProfile>> loadSites() async {
     final prefs = await SharedPreferences.getInstance();
@@ -72,6 +76,11 @@ class SettingsRepository {
       syncWebDavUser: prefs.getString(_syncWebDavUserKey) ?? '',
       syncWebDavPass: prefs.getString(_syncWebDavPassKey) ?? '',
       lastSyncAtMs: prefs.getInt(_lastSyncAtMsKey) ?? 0,
+      novelLanServerUrl:
+          prefs.getString(_novelLanUrlKey) ?? 'http://192.168.1.2:8765',
+      readerFontSize: prefs.getDouble(_readerFontSizeKey) ?? 17.5,
+      readerLineHeight: prefs.getDouble(_readerLineHeightKey) ?? 1.75,
+      readerThemeMode: prefs.getString(_readerThemeModeKey) ?? 'dark',
     );
   }
 
@@ -98,5 +107,9 @@ class SettingsRepository {
     await prefs.setString(_syncWebDavUserKey, value.syncWebDavUser);
     await prefs.setString(_syncWebDavPassKey, value.syncWebDavPass);
     await prefs.setInt(_lastSyncAtMsKey, value.lastSyncAtMs);
+    await prefs.setString(_novelLanUrlKey, value.novelLanServerUrl);
+    await prefs.setDouble(_readerFontSizeKey, value.readerFontSize);
+    await prefs.setDouble(_readerLineHeightKey, value.readerLineHeight);
+    await prefs.setString(_readerThemeModeKey, value.readerThemeMode);
   }
 }

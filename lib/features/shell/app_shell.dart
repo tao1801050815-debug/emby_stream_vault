@@ -5,6 +5,7 @@ import '../../core/services/app_update_service.dart';
 import '../browser/webview_sniffer_page.dart';
 import '../downloads/downloads_page.dart';
 import '../library/library_home_page.dart';
+import '../novels/novel_shelf_page.dart';
 import '../settings/settings_page.dart';
 
 /// 主界面导航壳（影库 / 嗅探浏览器 / 离线缓存 / 设置）
@@ -21,6 +22,7 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   static const _pages = [
     LibraryHomePage(),
+    NovelShelfPage(),
     WebViewSnifferPage(),
     DownloadsPage(),
     SettingsPage(),
@@ -62,6 +64,11 @@ class _AppShellState extends ConsumerState<AppShell> {
             icon: Icon(Icons.movie_filter_outlined),
             selectedIcon: Icon(Icons.movie_filter_rounded),
             label: '私人影库',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.auto_stories_outlined),
+            selectedIcon: Icon(Icons.auto_stories_rounded),
+            label: '私人书架',
           ),
           NavigationDestination(
             icon: Icon(Icons.explore_outlined),
