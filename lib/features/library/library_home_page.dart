@@ -458,6 +458,30 @@ class _LibraryHomePageState extends ConsumerState<LibraryHomePage> {
                               ),
                             ),
                           ),
+                          ...filter.selectedActors.map(
+                            (actor) => Padding(
+                              padding: const EdgeInsets.only(right: 6),
+                              child: InputChip(
+                                visualDensity: VisualDensity.compact,
+                                avatar: const Icon(Icons.person_rounded,
+                                    size: 14, color: EmbyTheme.accent),
+                                label: Text(
+                                  actor,
+                                  style: const TextStyle(fontSize: 11.5),
+                                ),
+                                onDeleted: () {
+                                  final next = {...filter.selectedActors}
+                                    ..remove(actor);
+                                  setState(() => _currentPage = 1);
+                                  ref
+                                      .read(libraryFilterProvider.notifier)
+                                      .state = filter.copyWith(
+                                    selectedActors: next,
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
                           ...filter.selectedTags.map(
                             (tag) => Padding(
                               padding: const EdgeInsets.only(right: 6),
@@ -491,6 +515,7 @@ class _LibraryHomePageState extends ConsumerState<LibraryHomePage> {
                               ref.read(libraryFilterProvider.notifier).state =
                                   filter.copyWith(
                                 selectedSources: const {},
+                                selectedActors: const {},
                                 selectedTags: const {},
                               );
                             },
@@ -590,12 +615,13 @@ class _LibraryHomePageState extends ConsumerState<LibraryHomePage> {
     );
   }
 
-  /// 打开「来源标签 + 内容标签」筛选面板
+  /// 打开「来源标签 + 女优标签 + 内容标签」筛选面板
   Future<void> _openTagFilterSheet(LibraryFilter currentFilter) async {
     final facets = await ref.read(libraryTagFacetsProvider.future);
     if (!mounted) return;
 
     final pickedSources = {...currentFilter.selectedSources};
+    final pickedActors = {...currentFilter.selectedActors};
     final pickedTags = {...currentFilter.selectedTags};
     var searchKw = '';
 
@@ -614,17 +640,24 @@ class _LibraryHomePageState extends ConsumerState<LibraryHomePage> {
               : facets.sourceTags
                   .where((e) => e.key.toLowerCase().contains(kw))
                   .toList();
+          final visibleActors = kw.isEmpty
+              ? facets.actorTags
+              : facets.actorTags
+                  .where((e) => e.key.toLowerCase().contains(kw))
+                  .toList();
           final visibleTags = kw.isEmpty
               ? facets.contentTags
               : facets.contentTags
                   .where((e) => e.key.toLowerCase().contains(kw))
                   .toList();
+          final totalPicked =
+              pickedSources.length + pickedActors.length + pickedTags.length;
 
           return DraggableScrollableSheet(
             expand: false,
-            initialChildSize: 0.72,
+            initialChildSize: 0.76,
             minChildSize: 0.45,
-            maxChildSize: 0.92,
+            maxChildSize: 0.94,
             builder: (_, scrollCtrl) => Column(
               children: [
                 Padding(
@@ -636,7 +669,7 @@ class _LibraryHomePageState extends ConsumerState<LibraryHomePage> {
                       const SizedBox(width: 8),
                       const Expanded(
                         child: Text(
-                          '按来源与标签筛选',
+                          '按来源 / 女优 / 标签筛选',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
@@ -647,6 +680,7 @@ class _LibraryHomePageState extends ConsumerState<LibraryHomePage> {
                         onPressed: () {
                           setSheetState(() {
                             pickedSources.clear();
+                            pickedActors.clear();
                             pickedTags.clear();
                           });
                         },
@@ -661,7 +695,7 @@ class _LibraryHomePageState extends ConsumerState<LibraryHomePage> {
                     height: 38,
                     child: TextField(
                       decoration: const InputDecoration(
-                        hintText: '搜索标签或来源（如 中出、后宫、missav、hanime）...',
+                        hintText: '搜索女优名、标签或来源（如 三上、中出、后宫、missav）...',
                         prefixIcon: Icon(Icons.search_rounded, size: 18),
                         contentPadding: EdgeInsets.symmetric(horizontal: 10),
                       ),
@@ -676,7 +710,7 @@ class _LibraryHomePageState extends ConsumerState<LibraryHomePage> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     children: [
                       const Text(
-                        '来源网站标签（可多选，命中任一即显示）',
+                        '来源网站标签（多选命中任一）',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
@@ -720,7 +754,50 @@ class _LibraryHomePageState extends ConsumerState<LibraryHomePage> {
                         ),
                       const SizedBox(height: 18),
                       const Text(
-                        '影片内容标签（可多选叠加，如 中出 + 无码）',
+                        '女优 / 演员标签（多选命中任一）',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: EmbyTheme.accent,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (visibleActors.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            '暂无匹配的女优标签（从 MissAV 收藏或详情页补充演员后会自动汇总）',
+                            style: TextStyle(
+                                fontSize: 12, color: EmbyTheme.textSecondary),
+                          ),
+                        )
+                      else
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: visibleActors.map((entry) {
+                            final selected = pickedActors.contains(entry.key);
+                            return FilterChip(
+                              avatar: const Icon(Icons.person_rounded, size: 15),
+                              selected: selected,
+                              selectedColor:
+                                  EmbyTheme.accent.withValues(alpha: 0.28),
+                              label: Text('${entry.key} (${entry.value})'),
+                              onSelected: (v) {
+                                setSheetState(() {
+                                  if (v) {
+                                    pickedActors.add(entry.key);
+                                  } else {
+                                    pickedActors.remove(entry.key);
+                                  }
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      const SizedBox(height: 18),
+                      const Text(
+                        '影片内容标签（多选叠加，如 中出 + 后宫）',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
@@ -782,8 +859,8 @@ class _LibraryHomePageState extends ConsumerState<LibraryHomePage> {
                           onPressed: () => Navigator.pop(ctx, true),
                           icon: const Icon(Icons.check_rounded, size: 18),
                           label: Text(
-                            (pickedSources.length + pickedTags.length) > 0
-                                ? '应用筛选 (${pickedSources.length + pickedTags.length})'
+                            totalPicked > 0
+                                ? '应用筛选 ($totalPicked)'
                                 : '显示全部影片',
                           ),
                         ),
@@ -802,6 +879,7 @@ class _LibraryHomePageState extends ConsumerState<LibraryHomePage> {
       setState(() => _currentPage = 1);
       ref.read(libraryFilterProvider.notifier).state = currentFilter.copyWith(
         selectedSources: pickedSources,
+        selectedActors: pickedActors,
         selectedTags: pickedTags,
       );
     }

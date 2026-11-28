@@ -93,6 +93,7 @@ class LibraryFilter {
   final double minRating;
   final String sortBy;
   final Set<String> selectedSources; // 选中的来源标签（小写 key，如 missav / hanime1）
+  final Set<String> selectedActors; // 选中的女优/演员标签
   final Set<String> selectedTags; // 选中的影片标签（如 中出 / 后宫 / 无码流出）
 
   const LibraryFilter({
@@ -101,15 +102,22 @@ class LibraryFilter {
     this.minRating = 0.0,
     this.sortBy = 'updatedAtMs',
     this.selectedSources = const {},
+    this.selectedActors = const {},
     this.selectedTags = const {},
   });
 
-  int get activeTagFilterCount => selectedSources.length + selectedTags.length;
+  int get activeTagFilterCount =>
+      selectedSources.length + selectedActors.length + selectedTags.length;
 
-  /// 纯函数：按来源标签（OR）与影片内容标签（AND）精确过滤列表
+  /// 纯函数：按来源标签（OR）、女优标签（OR）与影片内容标签（AND）精确过滤列表
   List<MediaItem> applyTagFilters(List<MediaItem> items) {
-    if (selectedSources.isEmpty && selectedTags.isEmpty) return items;
+    if (selectedSources.isEmpty &&
+        selectedActors.isEmpty &&
+        selectedTags.isEmpty) {
+      return items;
+    }
     final lowerSources = selectedSources.map((e) => e.toLowerCase()).toSet();
+    final lowerActors = selectedActors.map((e) => e.toLowerCase()).toSet();
     final lowerTags = selectedTags.map((e) => e.toLowerCase()).toSet();
 
     return items.where((item) {
@@ -117,6 +125,14 @@ class LibraryFilter {
         final site = item.sourceSite.trim().toLowerCase();
         final normalizedSite = site.isEmpty ? 'custom' : site;
         if (!lowerSources.contains(normalizedSite)) {
+          return false;
+        }
+      }
+      if (lowerActors.isNotEmpty) {
+        final itemLowerActors =
+            item.actors.map((a) => a.trim().toLowerCase()).toSet();
+        final matchedAnyActor = lowerActors.any(itemLowerActors.contains);
+        if (!matchedAnyActor) {
           return false;
         }
       }
@@ -139,6 +155,7 @@ class LibraryFilter {
     double? minRating,
     String? sortBy,
     Set<String>? selectedSources,
+    Set<String>? selectedActors,
     Set<String>? selectedTags,
   }) {
     return LibraryFilter(
@@ -147,6 +164,7 @@ class LibraryFilter {
       minRating: minRating ?? this.minRating,
       sortBy: sortBy ?? this.sortBy,
       selectedSources: selectedSources ?? this.selectedSources,
+      selectedActors: selectedActors ?? this.selectedActors,
       selectedTags: selectedTags ?? this.selectedTags,
     );
   }
@@ -155,13 +173,15 @@ class LibraryFilter {
 final libraryFilterProvider =
     StateProvider<LibraryFilter>((ref) => const LibraryFilter());
 
-/// 全库标签与来源站点聚合统计（不受当前筛选隐藏，方便随时切换）
+/// 全库来源、女优与内容标签聚合统计（不受当前筛选隐藏，方便随时切换）
 class LibraryTagFacets {
   final List<MapEntry<String, int>> sourceTags; // (sourceKey, count)
+  final List<MapEntry<String, int>> actorTags; // (actorName, count)
   final List<MapEntry<String, int>> contentTags; // (tagName, count)
 
   const LibraryTagFacets({
     this.sourceTags = const [],
+    this.actorTags = const [],
     this.contentTags = const [],
   });
 }
@@ -171,12 +191,21 @@ final libraryTagFacetsProvider = FutureProvider<LibraryTagFacets>((ref) async {
   ref.watch(mediaLibraryProvider);
   final allItems = await DatabaseHelper.instance.getAllMediaItems();
   final sourceCounts = <String, int>{};
+  final actorCounts = <String, int>{};
   final tagCounts = <String, int>{};
 
   for (final item in allItems) {
     final src = item.sourceSite.trim().toLowerCase();
     final key = src.isEmpty ? 'custom' : src;
     sourceCounts[key] = (sourceCounts[key] ?? 0) + 1;
+
+    final seenActors = <String>{};
+    for (final rawActor in item.actors) {
+      final a = rawActor.trim();
+      if (a.isNotEmpty && seenActors.add(a.toLowerCase())) {
+        actorCounts[a] = (actorCounts[a] ?? 0) + 1;
+      }
+    }
 
     final seenTags = <String>{};
     for (final rawTag in item.tags) {
@@ -189,11 +218,14 @@ final libraryTagFacetsProvider = FutureProvider<LibraryTagFacets>((ref) async {
 
   final sortedSources = sourceCounts.entries.toList()
     ..sort((a, b) => b.value.compareTo(a.value));
+  final sortedActors = actorCounts.entries.toList()
+    ..sort((a, b) => b.value.compareTo(a.value));
   final sortedTags = tagCounts.entries.toList()
     ..sort((a, b) => b.value.compareTo(a.value));
 
   return LibraryTagFacets(
     sourceTags: sortedSources,
+    actorTags: sortedActors,
     contentTags: sortedTags,
   );
 });

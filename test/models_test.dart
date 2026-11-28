@@ -164,6 +164,7 @@ void main() {
           code: 'MIMK-173',
           title: 'A',
           sourceSite: 'missav',
+          actors: ['三上悠亚'],
           tags: ['中出', '无码流出'],
           updatedAtMs: 1,
         ),
@@ -172,6 +173,7 @@ void main() {
           code: 'HN-100',
           title: 'B',
           sourceSite: 'hanime1',
+          actors: ['深田咏美'],
           tags: ['后宫', '中出'],
           updatedAtMs: 2,
         ),
@@ -180,6 +182,7 @@ void main() {
           code: 'SSIS-001',
           title: 'C',
           sourceSite: 'missav',
+          actors: ['三上悠亚'],
           tags: ['巨乳'],
           updatedAtMs: 3,
         ),
@@ -189,12 +192,17 @@ void main() {
           .applyTagFilters(items);
       expect(bySource.map((e) => e.id), ['2']);
 
+      final byActor = const LibraryFilter(selectedActors: {'三上悠亚'})
+          .applyTagFilters(items);
+      expect(byActor.map((e) => e.id), ['1', '3']);
+
       final byTag = const LibraryFilter(selectedTags: {'中出'})
           .applyTagFilters(items);
       expect(byTag.map((e) => e.id), ['1', '2']);
 
       final combined = const LibraryFilter(
         selectedSources: {'missav'},
+        selectedActors: {'三上悠亚'},
         selectedTags: {'中出'},
       ).applyTagFilters(items);
       expect(combined.map((e) => e.id), ['1']);

@@ -8,6 +8,7 @@ import '../../core/theme/emby_theme.dart';
 import '../../core/widgets/cum_count_badge.dart';
 import '../browser/webview_sniffer_page.dart';
 import '../player/enhanced_player_page.dart';
+import 'tag_collection_page.dart';
 
 /// 仿 Emby 详情页：毛玻璃背景 + 个人评分/笔记 + 元数据纠错锁定 + 多源一键跳转
 class MediaDetailPage extends ConsumerStatefulWidget {
@@ -257,21 +258,34 @@ class _MediaDetailPageState extends ConsumerState<MediaDetailPage> {
                                 ),
                               ),
                               if (_item.sourceSite.isNotEmpty)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 3,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    '来源: ${_item.sourceSite.toUpperCase()}',
-                                    style: const TextStyle(
-                                      color: EmbyTheme.textPrimary,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 11,
+                                GestureDetector(
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => TagCollectionPage(
+                                          kind: CollectionKind.source,
+                                          value: _item.sourceSite,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: EmbyTheme.accentSecondary
+                                          .withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      '来源: ${_item.sourceTagLabel} ›',
+                                      style: const TextStyle(
+                                        color: EmbyTheme.accentSecondary,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 11,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -537,7 +551,7 @@ class _MediaDetailPageState extends ConsumerState<MediaDetailPage> {
                 if (_item.actors.isNotEmpty) ...[
                   const SizedBox(height: 14),
                   const Text(
-                    '演员',
+                    '女优 / 演员（点击查看全部作品）',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 8),
@@ -545,22 +559,55 @@ class _MediaDetailPageState extends ConsumerState<MediaDetailPage> {
                     spacing: 8,
                     runSpacing: 8,
                     children: _item.actors
-                        .map((a) => Chip(label: Text(a)))
+                        .map(
+                          (a) => ActionChip(
+                            avatar: const Icon(Icons.person_rounded,
+                                size: 16, color: EmbyTheme.accent),
+                            label: Text(a),
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => TagCollectionPage(
+                                    kind: CollectionKind.actor,
+                                    value: a,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        )
                         .toList(),
                   ),
                 ],
                 if (_item.tags.isNotEmpty) ...[
                   const SizedBox(height: 14),
                   const Text(
-                    '标签',
+                    '标签（点击查看同标签片单）',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children:
-                        _item.tags.map((t) => Chip(label: Text(t))).toList(),
+                    children: _item.tags
+                        .map(
+                          (t) => ActionChip(
+                            avatar: const Icon(Icons.tag_rounded,
+                                size: 15, color: Color(0xFFFF7AA8)),
+                            label: Text(t),
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => TagCollectionPage(
+                                    kind: CollectionKind.tag,
+                                    value: t,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        )
+                        .toList(),
                   ),
                 ],
                 if (_item.notes.isNotEmpty) ...[
